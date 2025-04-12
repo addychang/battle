@@ -1,0 +1,2453 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>双人躲避游戏</title>
+    <style>
+        #game {
+            width: 800px;
+            height: 600px;
+            border: 2px solid black;
+            position: relative;
+            overflow: hidden;
+            margin: 0 auto;
+            background: linear-gradient(to right, #f0f0ff, #fff0f0);
+        }
+        .player {
+            width: 50px;
+            height: 70px;
+            position: absolute;
+            z-index: 1;
+        }
+        /* 人形玩家样式 */
+        .player-body {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transform-origin: center bottom;
+            transition: transform 0.2s;
+        }
+        .head {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background-color: #FFD8B8;
+            border-radius: 50%;
+            top: 0;
+            left: 10px;
+            transition: transform 0.2s;
+        }
+        .torso {
+            position: absolute;
+            width: 30px;
+            height: 25px;
+            top: 30px;
+            left: 10px;
+            border-radius: 5px 5px 0 0;
+            transition: transform 0.2s, background-color 0.2s;
+        }
+        .arm {
+            position: absolute;
+            width: 10px;
+            height: 25px;
+            top: 30px;
+            border-radius: 5px;
+            transition: transform 0.3s, background-color 0.2s;
+            transform-origin: top center;
+        }
+        .arm.left {
+            left: 0;
+        }
+        .arm.right {
+            right: 0;
+        }
+        .leg {
+            position: absolute;
+            width: 10px;
+            height: 25px;
+            top: 55px;
+            border-radius: 0 0 5px 5px;
+            transition: transform 0.3s, background-color 0.2s;
+            transform-origin: top center;
+        }
+        .leg.left {
+            left: 10px;
+        }
+        .leg.right {
+            right: 10px;
+        }
+        /* 特定玩家颜色 */
+        #player1 .torso, #player1 .arm, #player1 .leg {
+            background-color: blue;
+        }
+        #player2 .torso, #player2 .arm, #player2 .leg {
+            background-color: green;
+        }
+        .player-name {
+            position: absolute;
+            top: -20px;
+            width: 100%;
+            text-align: center;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 1px black;
+        }
+
+        /* 行走动画 */
+        @keyframes walkLegs {
+            0% { transform: rotate(0deg); }
+            25% { transform: rotate(20deg); }
+            50% { transform: rotate(0deg); }
+            75% { transform: rotate(-20deg); }
+            100% { transform: rotate(0deg); }
+        }
+
+        @keyframes walkArms {
+            0% { transform: rotate(0deg); }
+            25% { transform: rotate(-15deg); }
+            50% { transform: rotate(0deg); }
+            75% { transform: rotate(15deg); }
+            100% { transform: rotate(0deg); }
+        }
+
+        .walking .leg.left {
+            animation: walkLegs 0.5s infinite;
+        }
+
+        .walking .leg.right {
+            animation: walkLegs 0.5s infinite reverse;
+        }
+
+        .walking .arm.left {
+            animation: walkArms 0.5s infinite reverse;
+        }
+
+        .walking .arm.right {
+            animation: walkArms 0.5s infinite;
+        }
+
+        /* 改进的抱起动画 */
+        .carried {
+            transform: scale(0.7);
+            opacity: 0.8;
+            pointer-events: none;
+            transition: transform 0.3s ease-out, opacity 0.3s;
+        }
+        .carrying .arm.left, .carrying .arm.right {
+            transform: rotate(-45deg);
+            transform-origin: top center;
+            transition: transform 0.3s ease-out;
+        }
+        /* 被抱起的玩家位置 */
+        .carried-position {
+            top: -40px !important;
+            transition: top 0.3s ease-out !important;
+        }
+
+        /* 改进的殴打动画 */
+        .punching .arm.right {
+            animation: improvedPunch 0.3s ease-in-out;
+        }
+        @keyframes improvedPunch {
+            0% { transform: rotate(-20deg); }
+            10% { transform: rotate(-40deg); }
+            30% { transform: rotate(60deg); }
+            60% { transform: rotate(60deg); }
+            100% { transform: rotate(0deg); }
+        }
+
+        .obstacle {
+            width: 30px;
+            height: 30px;
+            background-color: red;
+            position: absolute;
+            top: 0;
+            z-index: 0;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+            transition: transform 0.3s, opacity 0.3s;
+        }
+        #stats {
+            width: 800px;
+            margin: 10px auto;
+            display: flex;
+            justify-content: space-around;
+            font-size: 24px;
+        }
+        .player-stats {
+            text-align: center;
+        }
+        .health {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 300px;
+        }
+        .heart {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            margin: 0 2px;
+            clip-path: path('M10,0 A5,5 0 0,1 20,5 C20,8 16.67,11 10,20 C3.33,11 0,8 0,5 A5,5 0 0,1 10,0Z');
+            transition: background-color 0.3s;
+        }
+        .p1-heart {
+            background-color: blue;
+        }
+        .p2-heart {
+            background-color: green;
+        }
+        .heart.empty {
+            background-color: #ddd;
+        }
+        #controls {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 18px;
+        }
+        #shop-button {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        #shop-button:hover {
+            background-color: #3d8b40;
+            transform: translateY(-2px);
+        }
+        #shop-button:active {
+            transform: translateY(1px);
+        }
+        #shop-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            z-index: 200;
+        }
+        .shop-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 20px;
+            width: 80%;
+            max-width: 700px;
+            border-radius: 10px;
+            position: relative;
+            transform: scale(0.9);
+            opacity: 0;
+            transition: transform 0.3s, opacity 0.3s;
+        }
+        .shop-modal-visible .shop-content {
+            transform: scale(1);
+            opacity: 1;
+        }
+        .close-shop {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .shop-items {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        .shop-item {
+            width: 30%;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-bottom: 15px;
+        }
+        .shop-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .buy-button {
+            margin-top: 10px;
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        .buy-button:hover:not(:disabled) {
+            background-color: #3d8b40;
+        }
+        .buy-button:active:not(:disabled) {
+            transform: scale(0.95);
+        }
+        .buy-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .item-icon {
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+        .item-count {
+            margin-top: 5px;
+            font-size: 14px;
+        }
+        .total-score {
+            font-weight: bold;
+            color: #FF5722;
+        }
+        .player-tools {
+            margin-top: 10px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        .tool-button {
+            padding: 5px 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        .tool-button:hover:not(:disabled) {
+            background-color: #e0e0e0;
+        }
+        .tool-button:active:not(:disabled) {
+            transform: scale(0.95);
+        }
+        .bullet {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: yellow;
+            border-radius: 50%;
+            z-index: 2;
+            box-shadow: 0 0 5px yellow;
+        }
+        .hammer-shield {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: 3px dashed orange;
+            z-index: 0;
+            animation: rotate 2s linear infinite;
+            pointer-events: none;
+            box-shadow: 0 0 15px rgba(255, 165, 0, 0.5);
+        }
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .current-game {
+            font-size: 16px;
+            color: #666;
+        }
+
+        /* 改进的被殴打效果 */
+        .hit {
+            animation: improvedShake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes improvedShake {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            10% { transform: translate(-5px, -5px) rotate(-2deg); }
+            20% { transform: translate(5px, 0) rotate(2deg); }
+            30% { transform: translate(-5px, 5px) rotate(-1deg); }
+            40% { transform: translate(5px, 5px) rotate(1deg); }
+            50% { transform: translate(-5px, -5px) rotate(-1deg); }
+            60% { transform: translate(5px, 0) rotate(1deg); }
+            70% { transform: translate(-5px, 5px) rotate(-2deg); }
+            80% { transform: translate(5px, -5px) rotate(2deg); }
+            90% { transform: translate(-5px, 0) rotate(-1deg); }
+            100% { transform: translate(0, 0) rotate(0deg); }
+        }
+
+        /* 抛出轨迹效果 */
+        .player-trail {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.7;
+            transition: opacity 0.5s, transform 0.5s;
+        }
+
+        /* 效果文本 */
+        .effect-text {
+            position: absolute;
+            color: red;
+            font-weight: bold;
+            font-size: 24px;
+            z-index: 5;
+            opacity: 1;
+            transition: transform 1s, opacity 1s;
+        }
+
+        /* 爆炸效果 */
+        .explosion {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background-color: orange;
+            border-radius: 50%;
+            box-shadow: 0 0 20px yellow;
+            z-index: 3;
+            transition: transform 0.3s, opacity 0.3s;
+        }
+
+        /* 玩家死亡样式 */
+        .player.dead {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .player.dead .player-body {
+            transform: rotate(90deg) !important;
+            transition: transform 0.8s ease-out !important;
+        }
+
+        .player.dead .torso,
+        .player.dead .arm,
+        .player.dead .leg {
+            filter: grayscale(100%);
+        }
+
+        /* 游戏结果面板 */
+        #result-panel {
+            position: absolute;
+            width: 60%;
+            top: 30%;
+            left: 20%;
+            background-color: rgba(0,0,0,0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 100;
+            box-shadow: 0 0 20px rgba(255,255,255,0.5);
+            transform: scale(0);
+            transition: transform 0.5s ease-out;
+        }
+
+        /* 游戏时间显示 */
+        #game-time {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            font-size: 20px;
+            color: #333;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(255,255,255,0.7);
+        }
+
+        /* 难度提示 */
+        .difficulty-indicator {
+            position: absolute;
+            top: 40px;
+            width: 100%;
+            text-align: center;
+            font-size: 16px;
+            color: #FF5722;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 1s;
+        }
+
+        /* 添加血量变化动画 */
+        .heart-damage {
+            animation: heartDamage 0.5s ease-in-out;
+        }
+
+        @keyframes heartDamage {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.3); filter: brightness(1.5); }
+            100% { transform: scale(1); }
+        }
+
+        /* 平底锅效果 */
+        .frying-pan-active {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: #777;
+            border-radius: 10px;
+            z-index: 2;
+            transform-origin: center center;
+            animation: panSwing 0.5s infinite alternate;
+        }
+
+        @keyframes panSwing {
+            0% { transform: rotate(-15deg); }
+            100% { transform: rotate(15deg); }
+        }
+
+        /* 医疗包效果 */
+        .medkit-effect {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            background: radial-gradient(circle, rgba(0,255,0,0.5) 0%, rgba(0,255,0,0) 70%);
+            border-radius: 50%;
+            z-index: 0;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.8); opacity: 0.7; }
+            50% { transform: scale(1.2); opacity: 0.3; }
+            100% { transform: scale(0.8); opacity: 0.7; }
+        }
+
+        /* 按钮组样式调整 */
+        .shop-tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .shop-tabs button {
+            padding: 8px 15px;
+            border: none;
+            background-color: #f0f0f0;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin: 0 5px;
+        }
+
+        .shop-tabs button.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        /* 添加玩家碰撞效果 */
+        .player-collision {
+            animation: collision 0.3s ease-in-out;
+        }
+
+        @keyframes collision {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+<div id="stats">
+    <div class="player-stats">
+        <div>玩家1累计积分: <span id="totalScore1" class="total-score">0</span></div>
+        <div class="current-game">本局分数: <span id="scoreValue1">0</span></div>
+        <div class="health" id="health1">
+            <div class="heart p1-heart"></div>
+            <div class="heart p1-heart"></div>
+            <div class="heart p1-heart"></div>
+            <div class="heart p1-heart"></div>
+            <div class="heart p1-heart"></div>
+            <div class="heart p1-heart"></div>
+            <div class="heart p1-heart"></div>
+            <div class="heart p1-heart"></div>
+            <div class="heart p1-heart"></div>
+            <div class="heart p1-heart"></div>
+        </div>
+        <div class="player-tools">
+            <button id="pan1" class="tool-button" disabled>平底锅 (0)</button>
+            <button id="hammer1" class="tool-button" disabled>流星锤 (0)</button>
+            <button id="medkit1" class="tool-button" disabled>医疗包 (0)</button>
+        </div>
+    </div>
+    <div class="player-stats">
+        <div>玩家2累计积分: <span id="totalScore2" class="total-score">0</span></div>
+        <div class="current-game">本局分数: <span id="scoreValue2">0</span></div>
+        <div class="health" id="health2">
+            <div class="heart p2-heart"></div>
+            <div class="heart p2-heart"></div>
+            <div class="heart p2-heart"></div>
+            <div class="heart p2-heart"></div>
+            <div class="heart p2-heart"></div>
+            <div class="heart p2-heart"></div>
+            <div class="heart p2-heart"></div>
+            <div class="heart p2-heart"></div>
+            <div class="heart p2-heart"></div>
+            <div class="heart p2-heart"></div>
+        </div>
+        <div class="player-tools">
+            <button id="pan2" class="tool-button" disabled>平底锅 (0)</button>
+            <button id="hammer2" class="tool-button" disabled>流星锤 (0)</button>
+            <button id="medkit2" class="tool-button" disabled>医疗包 (0)</button>
+        </div>
+    </div>
+</div>
+<div id="game">
+    <div id="game-time">游戏时间: 00:00</div>
+    <div class="difficulty-indicator">难度增加！</div>
+    <div id="player1" class="player">
+        <div class="player-name">P1</div>
+        <div class="player-body">
+            <div class="head"></div>
+            <div class="torso"></div>
+            <div class="arm left"></div>
+            <div class="arm right"></div>
+            <div class="leg left"></div>
+            <div class="leg right"></div>
+        </div>
+    </div>
+    <div id="player2" class="player">
+        <div class="player-name">P2</div>
+        <div class="player-body">
+            <div class="head"></div>
+            <div class="torso"></div>
+            <div class="arm left"></div>
+            <div class="arm right"></div>
+            <div class="leg left"></div>
+            <div class="leg right"></div>
+        </div>
+    </div>
+</div>
+<div id="controls">
+    玩家1: WSAD键移动, 左R抱起/抛出, T殴打, 1使用平底锅, 2使用流星锤, 3使用医疗包 | 玩家2: ↑↓←→移动, 右P抱起/抛出, O殴打, 8使用平底锅, 9使用流星锤, 0使用医疗包
+</div>
+
+<button id="shop-button">打开商店</button>
+
+<div id="shop-modal">
+    <div class="shop-content">
+        <span class="close-shop">&times;</span>
+        <h2>游戏商店</h2>
+        <div class="shop-tabs">
+            <button id="p1-tab" class="active">玩家1</button>
+            <button id="p2-tab">玩家2</button>
+        </div>
+        <div id="p1-shop" class="shop-items">
+            <div class="shop-item">
+                <div class="item-icon">🍳</div>
+                <h3>平底锅</h3>
+                <p>增强殴打伤害</p>
+                <p>价格: 10积分</p>
+                <div class="item-count">拥有: <span id="p1-pan-count">0</span></div>
+                <button id="buy-pan-p1" class="buy-button">购买</button>
+            </div>
+            <div class="shop-item">
+                <div class="item-icon">🔮</div>
+                <h3>流星锤</h3>
+                <p>创建保护罩抵挡障碍物</p>
+                <p>价格: 20积分</p>
+                <div class="item-count">拥有: <span id="p1-hammer-count">0</span></div>
+                <button id="buy-hammer-p1" class="buy-button">购买</button>
+            </div>
+            <div class="shop-item">
+                <div class="item-icon">🩹</div>
+                <h3>医疗包</h3>
+                <p>完全恢复生命值/复活</p>
+                <p>价格: 30积分</p>
+                <div class="item-count">拥有: <span id="p1-medkit-count">0</span></div>
+                <button id="buy-medkit-p1" class="buy-button">购买</button>
+            </div>
+        </div>
+        <div id="p2-shop" class="shop-items" style="display:none;">
+            <div class="shop-item">
+                <div class="item-icon">🍳</div>
+                <h3>平底锅</h3>
+                <p>增强殴打伤害</p>
+                <p>价格: 10积分</p>
+                <div class="item-count">拥有: <span id="p2-pan-count">0</span></div>
+                <button id="buy-pan-p2" class="buy-button">购买</button>
+            </div>
+            <div class="shop-item">
+                <div class="item-icon">🔮</div>
+                <h3>流星锤</h3>
+                <p>创建保护罩抵挡障碍物</p>
+                <p>价格: 20积分</p>
+                <div class="item-count">拥有: <span id="p2-hammer-count">0</span></div>
+                <button id="buy-hammer-p2" class="buy-button">购买</button>
+            </div>
+            <div class="shop-item">
+                <div class="item-icon">🩹</div>
+                <h3>医疗包</h3>
+                <p>完全恢复生命值/复活</p>
+                <p>价格: 30积分</p>
+                <div class="item-count">拥有: <span id="p2-medkit-count">0</span></div>
+                <button id="buy-medkit-p2" class="buy-button">购买</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const game = document.getElementById('game');
+    const player1 = document.getElementById('player1');
+    const player2 = document.getElementById('player2');
+    const score1Element = document.getElementById('scoreValue1');
+    const score2Element = document.getElementById('scoreValue2');
+    const totalScore1Element = document.getElementById('totalScore1');
+    const totalScore2Element = document.getElementById('totalScore2');
+    const hearts1 = document.querySelectorAll('#health1 .heart');
+    const hearts2 = document.querySelectorAll('#health2 .heart');
+    const shopButton = document.getElementById('shop-button');
+    const shopModal = document.getElementById('shop-modal');
+    const closeShop = document.querySelector('.close-shop');
+    const p1Tab = document.getElementById('p1-tab');
+    const p2Tab = document.getElementById('p2-tab');
+    const p1Shop = document.getElementById('p1-shop');
+    const p2Shop = document.getElementById('p2-shop');
+    const buyPanP1 = document.getElementById('buy-pan-p1');
+    const buyHammerP1 = document.getElementById('buy-hammer-p1');
+    const buyMedkitP1 = document.getElementById('buy-medkit-p1');
+    const buyPanP2 = document.getElementById('buy-pan-p2');
+    const buyHammerP2 = document.getElementById('buy-hammer-p2');
+    const buyMedkitP2 = document.getElementById('buy-medkit-p2');
+    const p1PanCount = document.getElementById('p1-pan-count');
+    const p1HammerCount = document.getElementById('p1-hammer-count');
+    const p1MedkitCount = document.getElementById('p1-medkit-count');
+    const p2PanCount = document.getElementById('p2-pan-count');
+    const p2HammerCount = document.getElementById('p2-hammer-count');
+    const p2MedkitCount = document.getElementById('p2-medkit-count');
+    const pan1Button = document.getElementById('pan1');
+    const hammer1Button = document.getElementById('hammer1');
+    const medkit1Button = document.getElementById('medkit1');
+    const pan2Button = document.getElementById('pan2');
+    const hammer2Button = document.getElementById('hammer2');
+    const medkit2Button = document.getElementById('medkit2');
+    const gameTimeElement = document.getElementById('game-time');
+    const difficultyIndicator = document.querySelector('.difficulty-indicator');
+
+    let player1X = 175;
+    let player1Y = 480;
+    let player2X = 575;
+    let player2Y = 480;
+    let score1 = 0;
+    let score2 = 0;
+    let totalScore1 = 0;
+    let totalScore2 = 0;
+    let health1 = 10;
+    let health2 = 10;
+    let gameLoop;
+    let isGameOver = false;
+    let player1Died = false;
+    let player2Died = false;
+
+    // 记录玩家死亡时间
+    let player1DeathTime = null;
+    let player2DeathTime = null;
+
+    // 游戏难度系统
+    let gameStartTime = null;
+    let gameCurrentTime = 0;
+    let difficultyLevel = 1;
+    let obstacleFallBaseSpeed = 3;
+    let obstacleSpawnInterval = 1000;
+    let obstacleSpawnCount = 1;
+    let obstacleTimerId = null;
+
+    // 方向记录 (1:上, 2:右, 3:下, 4:左)
+    let player1Direction = 2;
+    let player2Direction = 4;
+
+    // 玩家速度和动画状态
+    let player1VelX = 0;
+    let player1VelY = 0;
+    let player2VelX = 0;
+    let player2VelY = 0;
+    let player1Walking = false;
+    let player2Walking = false;
+    const maxSpeed = 5;
+    const acceleration = 0.7;
+    const friction = 0.8;
+
+    // 玩家身体转向变量
+    let player1BodyRotation = 0;
+    let player2BodyRotation = 0;
+
+    // 道具数量
+    let p1Pans = 0;
+    let p1Hammers = 0;
+    let p1Medkits = 0;
+    let p2Pans = 0;
+    let p2Hammers = 0;
+    let p2Medkits = 0;
+
+    // 道具状态
+    let hammer1Active = false;
+    let hammer2Active = false;
+    let hammer1Shield = null;
+    let hammer2Shield = null;
+    let pan1Active = false;
+    let pan2Active = false;
+    let pan1Effect = null;
+    let pan2Effect = null;
+    let pan1Timeout = null;
+    let pan2Timeout = null;
+
+    // 抱起状态
+    let player1Carrying = false;
+    let player2Carrying = false;
+
+    // 抛出状态和速度
+    let player1Thrown = false;
+    let player2Thrown = false;
+    let throwVelocityX1 = 0;
+    let throwVelocityY1 = 0;
+    let throwVelocityX2 = 0;
+    let throwVelocityY2 = 0;
+
+    // 殴打冷却
+    let p1PunchCooldown = false;
+    let p2PunchCooldown = false;
+
+    // 键盘状态对象初始化
+    const keysPressed = {};
+
+    // 更新游戏时间显示
+    function updateGameTime() {
+        if (isGameOver || !gameStartTime) return;
+
+        const now = new Date().getTime();
+        const elapsedTime = Math.floor((now - gameStartTime) / 1000);
+        gameCurrentTime = elapsedTime;
+
+        const minutes = Math.floor(elapsedTime / 60).toString().padStart(2, '0');
+        const seconds = (elapsedTime % 60).toString().padStart(2, '0');
+
+        gameTimeElement.textContent = `游戏时间: ${minutes}:${seconds}`;
+
+        // 根据时间增加难度
+        updateDifficulty();
+    }
+
+    // 更新游戏难度
+    function updateDifficulty() {
+        // 每30秒增加一次难度
+        const newDifficultyLevel = Math.floor(gameCurrentTime / 30) + 1;
+
+        if (newDifficultyLevel > difficultyLevel) {
+            difficultyLevel = newDifficultyLevel;
+
+            // 提高障碍物下落速度
+            obstacleFallBaseSpeed = 3 + (difficultyLevel - 1) * 0.5;
+
+            // 减少障碍物生成间隔（最短300毫秒）
+            obstacleSpawnInterval = Math.max(300, 1000 - (difficultyLevel - 1) * 100);
+
+            // 每两个难度级别增加一个同时生成的障碍物数量
+            if (difficultyLevel % 2 === 0) {
+                obstacleSpawnCount++;
+            }
+
+            // 更新障碍物生成定时器
+            clearInterval(obstacleTimerId);
+            obstacleTimerId = setInterval(() => {
+                for (let i = 0; i < obstacleSpawnCount; i++) {
+                    createObstacle();
+                }
+            }, obstacleSpawnInterval);
+
+            // 显示难度提示
+            difficultyIndicator.textContent = `难度增加！(Level ${difficultyLevel})`;
+            difficultyIndicator.style.opacity = '1';
+
+            setTimeout(() => {
+                difficultyIndicator.style.opacity = '0';
+            }, 2000);
+        }
+    }
+
+    // 添加尾部轨迹
+    function createTrail(x, y, playerNum) {
+        const trail = document.createElement('div');
+        trail.className = 'player-trail';
+        trail.style.left = x + 'px';
+        trail.style.top = y + 'px';
+        trail.style.backgroundColor = playerNum === 1 ? 'rgba(0, 0, 255, 0.3)' : 'rgba(0, 128, 0, 0.3)';
+        game.appendChild(trail);
+
+        // 淡出效果
+        setTimeout(() => {
+            trail.style.opacity = 0;
+            trail.style.transform = 'scale(0.5)';
+            setTimeout(() => {
+                if (trail.parentNode) {
+                    trail.parentNode.removeChild(trail);
+                }
+            }, 500);
+        }, 10);
+    }
+
+    // 商店功能
+    shopButton.addEventListener('click', () => {
+        shopModal.style.display = 'block';
+        setTimeout(() => {
+            shopModal.classList.add('shop-modal-visible');
+        }, 10);
+        updateShopDisplay();
+    });
+
+    closeShop.addEventListener('click', () => {
+        shopModal.classList.remove('shop-modal-visible');
+        setTimeout(() => {
+            shopModal.style.display = 'none';
+        }, 300);
+    });
+
+    p1Tab.addEventListener('click', () => {
+        p1Shop.style.display = 'flex';
+        p2Shop.style.display = 'none';
+        p1Tab.classList.add('active');
+        p2Tab.classList.remove('active');
+    });
+
+    p2Tab.addEventListener('click', () => {
+        p1Shop.style.display = 'none';
+        p2Shop.style.display = 'flex';
+        p2Tab.classList.add('active');
+        p1Tab.classList.remove('active');
+    });
+
+    // 购买功能
+    buyPanP1.addEventListener('click', () => {
+        if (totalScore1 >= 10) {
+            totalScore1 -= 10;
+            p1Pans++;
+            updateShopDisplay();
+            updateToolButtons();
+        }
+    });
+
+    buyHammerP1.addEventListener('click', () => {
+        if (totalScore1 >= 20) {
+            totalScore1 -= 20;
+            p1Hammers++;
+            updateShopDisplay();
+            updateToolButtons();
+        }
+    });
+
+    buyMedkitP1.addEventListener('click', () => {
+        if (totalScore1 >= 30) {
+            totalScore1 -= 30;
+            p1Medkits++;
+            updateShopDisplay();
+            updateToolButtons();
+        }
+    });
+
+    buyPanP2.addEventListener('click', () => {
+        if (totalScore2 >= 10) {
+            totalScore2 -= 10;
+            p2Pans++;
+            updateShopDisplay();
+            updateToolButtons();
+        }
+    });
+
+    buyHammerP2.addEventListener('click', () => {
+        if (totalScore2 >= 20) {
+            totalScore2 -= 20;
+            p2Hammers++;
+            updateShopDisplay();
+            updateToolButtons();
+        }
+    });
+
+    buyMedkitP2.addEventListener('click', () => {
+        if (totalScore2 >= 30) {
+            totalScore2 -= 30;
+            p2Medkits++;
+            updateShopDisplay();
+            updateToolButtons();
+        }
+    });
+
+    function updateShopDisplay() {
+        totalScore1Element.textContent = totalScore1;
+        totalScore2Element.textContent = totalScore2;
+        p1PanCount.textContent = p1Pans;
+        p1HammerCount.textContent = p1Hammers;
+        p1MedkitCount.textContent = p1Medkits;
+        p2PanCount.textContent = p2Pans;
+        p2HammerCount.textContent = p2Hammers;
+        p2MedkitCount.textContent = p2Medkits;
+
+        buyPanP1.disabled = totalScore1 < 10;
+        buyHammerP1.disabled = totalScore1 < 20;
+        buyMedkitP1.disabled = totalScore1 < 30;
+        buyPanP2.disabled = totalScore2 < 10;
+        buyHammerP2.disabled = totalScore2 < 20;
+        buyMedkitP2.disabled = totalScore2 < 30;
+    }
+
+    function updateToolButtons() {
+        pan1Button.textContent = `平底锅 (${p1Pans})`;
+        hammer1Button.textContent = `流星锤 (${p1Hammers})`;
+        medkit1Button.textContent = `医疗包 (${p1Medkits})`;
+        pan2Button.textContent = `平底锅 (${p2Pans})`;
+        hammer2Button.textContent = `流星锤 (${p2Hammers})`;
+        medkit2Button.textContent = `医疗包 (${p2Medkits})`;
+
+        pan1Button.disabled = p1Pans <= 0 || player1Died;
+        hammer1Button.disabled = p1Hammers <= 0 || player1Died;
+        medkit1Button.disabled = p1Medkits <= 0;
+        pan2Button.disabled = p2Pans <= 0 || player2Died;
+        hammer2Button.disabled = p2Hammers <= 0 || player2Died;
+        medkit2Button.disabled = p2Medkits <= 0;
+    }
+
+    // 道具使用功能
+    pan1Button.addEventListener('click', () => usePan(1));
+    hammer1Button.addEventListener('click', () => useHammer(1));
+    medkit1Button.addEventListener('click', () => useMedkit(1));
+    pan2Button.addEventListener('click', () => usePan(2));
+    hammer2Button.addEventListener('click', () => useHammer(2));
+    medkit2Button.addEventListener('click', () => useMedkit(2));
+
+    function createExplosion(x, y) {
+        const explosion = document.createElement('div');
+        explosion.className = 'explosion';
+        explosion.style.left = x + 'px';
+        explosion.style.top = y + 'px';
+        explosion.style.transform = 'scale(0)';
+        game.appendChild(explosion);
+
+        setTimeout(() => {
+            explosion.style.transform = 'scale(2)';
+            setTimeout(() => {
+                explosion.style.opacity = '0';
+                setTimeout(() => {
+                    if (explosion.parentNode) {
+                        explosion.parentNode.removeChild(explosion);
+                    }
+                }, 300);
+            }, 200);
+        }, 10);
+    }
+
+    // 平底锅功能
+    function usePan(playerNum) {
+        if ((playerNum === 1 && p1Pans > 0 && !player1Died) ||
+            (playerNum === 2 && p2Pans > 0 && !player2Died)) {
+
+            // 创建平底锅效果
+            const panEffect = document.createElement('div');
+            panEffect.className = 'frying-pan-active';
+
+            if (playerNum === 1) {
+                p1Pans--;
+                pan1Active = true;
+
+                // 清除之前的效果
+                if (pan1Effect && pan1Effect.parentNode) {
+                    pan1Effect.parentNode.removeChild(pan1Effect);
+                }
+                if (pan1Timeout) {
+                    clearTimeout(pan1Timeout);
+                }
+
+                pan1Effect = panEffect;
+                player1.appendChild(panEffect);
+                panEffect.style.right = '-15px';
+                panEffect.style.top = '30px';
+
+                // 持续30秒
+                pan1Timeout = setTimeout(() => {
+                    pan1Active = false;
+                    if (pan1Effect && pan1Effect.parentNode) {
+                        pan1Effect.parentNode.removeChild(pan1Effect);
+                    }
+                    pan1Effect = null;
+                }, 30000);
+
+                createEffectText(player1X, player1Y - 30, "平底锅激活！", "#FF9800");
+            } else {
+                p2Pans--;
+                pan2Active = true;
+
+                // 清除之前的效果
+                if (pan2Effect && pan2Effect.parentNode) {
+                    pan2Effect.parentNode.removeChild(pan2Effect);
+                }
+                if (pan2Timeout) {
+                    clearTimeout(pan2Timeout);
+                }
+
+                pan2Effect = panEffect;
+                player2.appendChild(panEffect);
+                panEffect.style.left = '-15px';
+                panEffect.style.top = '30px';
+
+                // 持续30秒
+                pan2Timeout = setTimeout(() => {
+                    pan2Active = false;
+                    if (pan2Effect && pan2Effect.parentNode) {
+                        pan2Effect.parentNode.removeChild(pan2Effect);
+                    }
+                    pan2Effect = null;
+                }, 30000);
+
+                createEffectText(player2X, player2Y - 30, "平底锅激活！", "#FF9800");
+            }
+
+            updateToolButtons();
+        }
+    }
+
+    function useHammer(playerNum) {
+        if ((playerNum === 1 && p1Hammers > 0 && !hammer1Active && !player1Died) ||
+            (playerNum === 2 && p2Hammers > 0 && !hammer2Active && !player2Died)) {
+
+            // 创建保护罩
+            const shield = document.createElement('div');
+            shield.className = 'hammer-shield';
+            shield.style.transform = 'scale(0)';
+            shield.style.opacity = '0';
+            shield.style.transition = 'transform 0.3s, opacity 0.3s';
+            game.appendChild(shield);
+
+            setTimeout(() => {
+                shield.style.transform = 'scale(1)';
+                shield.style.opacity = '1';
+            }, 10);
+
+            if (playerNum === 1) {
+                p1Hammers--;
+                hammer1Active = true;
+                hammer1Shield = shield;
+            } else {
+                p2Hammers--;
+                hammer2Active = true;
+                hammer2Shield = shield;
+            }
+
+            updateToolButtons();
+
+            // 保护罩持续时间
+            setTimeout(() => {
+                if (playerNum === 1) {
+                    hammer1Active = false;
+                    if (hammer1Shield && hammer1Shield.parentNode) {
+                        hammer1Shield.style.transform = 'scale(0)';
+                        hammer1Shield.style.opacity = '0';
+                        setTimeout(() => {
+                            if (hammer1Shield && hammer1Shield.parentNode) {
+                                hammer1Shield.parentNode.removeChild(hammer1Shield);
+                            }
+                        }, 300);
+                    }
+                    hammer1Shield = null;
+                } else {
+                    hammer2Active = false;
+                    if (hammer2Shield && hammer2Shield.parentNode) {
+                        hammer2Shield.style.transform = 'scale(0)';
+                        hammer2Shield.style.opacity = '0';
+                        setTimeout(() => {
+                            if (hammer2Shield && hammer2Shield.parentNode) {
+                                hammer2Shield.parentNode.removeChild(hammer2Shield);
+                            }
+                        }, 300);
+                    }
+                    hammer2Shield = null;
+                }
+            }, 5000);
+        }
+    }
+
+    // 医疗包功能
+    function useMedkit(playerNum) {
+        if ((playerNum === 1 && p1Medkits > 0) || (playerNum === 2 && p2Medkits > 0)) {
+            // 创建医疗效果
+            const medkitEffect = document.createElement('div');
+            medkitEffect.className = 'medkit-effect';
+            game.appendChild(medkitEffect);
+
+            const playerX = playerNum === 1 ? player1X : player2X;
+            const playerY = playerNum === 1 ? player1Y : player2Y;
+
+            medkitEffect.style.left = (playerX - 40) + 'px';
+            medkitEffect.style.top = (playerY - 15) + 'px';
+
+            if (playerNum === 1) {
+                p1Medkits--;
+
+                // 复活或满血
+                if (player1Died) {
+                    player1Died = false;
+                    player1.classList.remove('dead');
+                    player1DeathTime = null;
+                    createEffectText(player1X, player1Y - 40, "复活！", "green");
+                } else {
+                    createEffectText(player1X, player1Y - 40, "满血！", "green");
+                }
+
+                health1 = 10;
+            } else {
+                p2Medkits--;
+
+                // 复活或满血
+                if (player2Died) {
+                    player2Died = false;
+                    player2.classList.remove('dead');
+                    player2DeathTime = null;
+                    createEffectText(player2X, player2Y - 40, "复活！", "green");
+                } else {
+                    createEffectText(player2X, player2Y - 40, "满血！", "green");
+                }
+
+                health2 = 10;
+            }
+
+            updateHealthDisplay();
+            updateToolButtons();
+
+            // 删除效果
+            setTimeout(() => {
+                if (medkitEffect.parentNode) {
+                    medkitEffect.style.opacity = '0';
+                    setTimeout(() => {
+                        if (medkitEffect.parentNode) {
+                            medkitEffect.parentNode.removeChild(medkitEffect);
+                        }
+                    }, 300);
+                }
+            }, 1000);
+        }
+    }
+
+    // 更新保护罩位置
+    function updateShieldPosition() {
+        if (hammer1Active && hammer1Shield) {
+            hammer1Shield.style.left = (player1X - 25) + 'px';
+            hammer1Shield.style.top = (player1Y - 15) + 'px';
+        }
+        if (hammer2Active && hammer2Shield) {
+            hammer2Shield.style.left = (player2X - 25) + 'px';
+            hammer2Shield.style.top = (player2Y - 15) + 'px';
+        }
+    }
+
+    // 创建效果文本
+    function createEffectText(x, y, text, color = 'red') {
+        const effectText = document.createElement('div');
+        effectText.className = 'effect-text';
+        effectText.style.left = x + 'px';
+        effectText.style.top = y + 'px';
+        effectText.style.color = color;
+        effectText.textContent = text;
+        game.appendChild(effectText);
+
+        setTimeout(() => {
+            effectText.style.transform = 'translateY(-30px)';
+            effectText.style.opacity = '0';
+            setTimeout(() => {
+                if (effectText.parentNode) {
+                    effectText.parentNode.removeChild(effectText);
+                }
+            }, 1000);
+        }, 10);
+
+        return effectText;
+    }
+
+    // 殴打功能
+    function punch(playerNum) {
+        if (playerNum === 1 && !p1PunchCooldown && !player1Died) {
+            p1PunchCooldown = true;
+            player1.classList.add('punching');
+
+            // 震动效果
+            const originalRotation = player1BodyRotation;
+            player1.querySelector('.player-body').style.transform = `rotate(${originalRotation + 5}deg)`;
+
+            setTimeout(() => {
+                player1.querySelector('.player-body').style.transform = `rotate(${originalRotation - 3}deg)`;
+                setTimeout(() => {
+                    player1.querySelector('.player-body').style.transform = `rotate(${originalRotation}deg)`;
+                    player1.classList.remove('punching');
+                    p1PunchCooldown = false;
+                }, 150);
+            }, 150);
+
+            // 检查是否击中对方
+            const distance = Math.sqrt(
+                Math.pow(player1X - player2X, 2) +
+                Math.pow(player1Y - player2Y, 2)
+            );
+
+            if (distance < 70 && !player2Died) {
+                player2.classList.add('hit');
+
+                // 击退效果
+                let knockbackX = 0;
+                let knockbackY = 0;
+
+                // 根据玩家1面向的方向确定击退方向
+                switch(player1Direction) {
+                    case 1: // 上
+                        knockbackY = -50;
+                        break;
+                    case 2: // 右
+                        knockbackX = 50;
+                        break;
+                    case 3: // 下
+                        knockbackY = 50;
+                        break;
+                    case 4: // 左
+                        knockbackX = -50;
+                        break;
+                }
+
+                // 添加击打效果
+                createEffectText(player2X, player2Y, 'POW!');
+
+                // 使用速度模拟击退，而不是直接设置位置
+                player2VelX += knockbackX / 5;
+                player2VelY += knockbackY / 5;
+
+                // 如果有平底锅，伤害增加
+                const damage = pan1Active ? 2 : 1;
+                takeDamage(2, damage);
+
+                setTimeout(() => {
+                    player2.classList.remove('hit');
+                }, 500);
+            }
+        }
+
+        if (playerNum === 2 && !p2PunchCooldown && !player2Died) {
+            p2PunchCooldown = true;
+            player2.classList.add('punching');
+
+            // 震动效果
+            const originalRotation = player2BodyRotation;
+            player2.querySelector('.player-body').style.transform = `rotate(${originalRotation - 5}deg)`;
+
+            setTimeout(() => {
+                player2.querySelector('.player-body').style.transform = `rotate(${originalRotation + 3}deg)`;
+                setTimeout(() => {
+                    player2.querySelector('.player-body').style.transform = `rotate(${originalRotation}deg)`;
+                    player2.classList.remove('punching');
+                    p2PunchCooldown = false;
+                }, 150);
+            }, 150);
+
+            // 检查是否击中对方
+            const distance = Math.sqrt(
+                Math.pow(player1X - player2X, 2) +
+                Math.pow(player1Y - player2Y, 2)
+            );
+
+            if (distance < 70 && !player1Died) {
+                player1.classList.add('hit');
+
+                // 击退效果
+                let knockbackX = 0;
+                let knockbackY = 0;
+
+                // 根据玩家2面向的方向确定击退方向
+                switch(player2Direction) {
+                    case 1: // 上
+                        knockbackY = -50;
+                        break;
+                    case 2: // 右
+                        knockbackX = 50;
+                        break;
+                    case 3: // 下
+                        knockbackY = 50;
+                        break;
+                    case 4: // 左
+                        knockbackX = -50;
+                        break;
+                }
+
+                // 添加击打效果
+                createEffectText(player1X, player1Y, 'BAM!');
+
+                // 使用速度模拟击退，而不是直接设置位置
+                player1VelX += knockbackX / 5;
+                player1VelY += knockbackY / 5;
+
+                // 如果有平底锅，伤害增加
+                const damage = pan2Active ? 2 : 1;
+                takeDamage(1, damage);
+
+                setTimeout(() => {
+                    player1.classList.remove('hit');
+                }, 500);
+            }
+        }
+    }
+
+    // 生成着陆效果
+    function createLandingEffect(x, y) {
+        const landingEffect = document.createElement('div');
+        landingEffect.style.position = 'absolute';
+        landingEffect.style.left = (x - 10) + 'px';
+        landingEffect.style.top = (y + 70) + 'px';
+        landingEffect.style.width = '70px';
+        landingEffect.style.height = '10px';
+        landingEffect.style.backgroundColor = 'rgba(100,100,100,0.5)';
+        landingEffect.style.borderRadius = '50%';
+        landingEffect.style.transform = 'scale(0.5, 1)';
+        landingEffect.style.opacity = '0.7';
+        landingEffect.style.transition = 'transform 0.2s, opacity 0.4s';
+        game.appendChild(landingEffect);
+
+        setTimeout(() => {
+            landingEffect.style.transform = 'scale(1, 0.5)';
+            landingEffect.style.opacity = '0';
+            setTimeout(() => {
+                if (landingEffect.parentNode) {
+                    landingEffect.parentNode.removeChild(landingEffect);
+                }
+            }, 400);
+        }, 10);
+    }
+
+    // 抛出功能
+    function throwPlayer(playerNum) {
+        if (playerNum === 1 && player1Carrying && !player1Died) {
+            player1Carrying = false;
+            player2.classList.remove('carried');
+            player2.classList.remove('carried-position');
+            player1.classList.remove('carrying');
+
+            // 设置抛出速度和方向
+            let throwPower = 15;
+
+            switch(player1Direction) {
+                case 1: // 上
+                    throwVelocityX2 = player1VelX * 0.5;
+                    throwVelocityY2 = -throwPower;
+                    break;
+                case 2: // 右
+                    throwVelocityX2 = throwPower;
+                    throwVelocityY2 = -throwPower/2;
+                    break;
+                case 3: // 下
+                    throwVelocityX2 = player1VelX * 0.5;
+                    throwVelocityY2 = throwPower/2;
+                    break;
+                case 4: // 左
+                    throwVelocityX2 = -throwPower;
+                    throwVelocityY2 = -throwPower/2;
+                    break;
+            }
+
+            player2Thrown = true;
+
+            // 抛出后的物理模拟
+            const throwInterval = setInterval(() => {
+                // 应用重力
+                throwVelocityY2 += 0.5;
+
+                // 创建轨迹
+                createTrail(player2X + 25, player2Y + 35, 2);
+
+                // 更新位置
+                player2X += throwVelocityX2;
+                player2Y += throwVelocityY2;
+
+                // 边界检查
+                if (player2X < 0) {
+                    player2X = 0;
+                    throwVelocityX2 = -throwVelocityX2 * 0.5;
+                }
+                if (player2X > 750) {
+                    player2X = 750;
+                    throwVelocityX2 = -throwVelocityX2 * 0.5;
+                }
+                if (player2Y > 530) {
+                    player2Y = 530;
+
+                    // 添加着陆效果
+                    createLandingEffect(player2X, player2Y);
+
+                    // 弹跳效果
+                    if (Math.abs(throwVelocityY2) > 3) {
+                        throwVelocityY2 = -throwVelocityY2 * 0.3;
+                    } else {
+                        throwVelocityY2 = 0;
+                        throwVelocityX2 *= 0.8;
+                        player2Thrown = false;
+                        clearInterval(throwInterval);
+                    }
+                }
+
+                updatePositions();
+            }, 30);
+        }
+
+        if (playerNum === 2 && player2Carrying && !player2Died) {
+            player2Carrying = false;
+            player1.classList.remove('carried');
+            player1.classList.remove('carried-position');
+            player2.classList.remove('carrying');
+
+            // 设置抛出速度和方向
+            let throwPower = 15;
+
+            switch(player2Direction) {
+                case 1: // 上
+                    throwVelocityX1 = player2VelX * 0.5;
+                    throwVelocityY1 = -throwPower;
+                    break;
+                case 2: // 右
+                    throwVelocityX1 = throwPower;
+                    throwVelocityY1 = -throwPower/2;
+                    break;
+                case 3: // 下
+                    throwVelocityX1 = player2VelX * 0.5;
+                    throwVelocityY1 = throwPower/2;
+                    break;
+                case 4: // 左
+                    throwVelocityX1 = -throwPower;
+                    throwVelocityY1 = -throwPower/2;
+                    break;
+            }
+
+            player1Thrown = true;
+
+            // 抛出后的物理模拟
+            const throwInterval = setInterval(() => {
+                // 应用重力
+                throwVelocityY1 += 0.5;
+
+                // 创建轨迹
+                createTrail(player1X + 25, player1Y + 35, 1);
+
+                // 更新位置
+                player1X += throwVelocityX1;
+                player1Y += throwVelocityY1;
+
+                // 边界检查
+                if (player1X < 0) {
+                    player1X = 0;
+                    throwVelocityX1 = -throwVelocityX1 * 0.5;
+                }
+                if (player1X > 750) {
+                    player1X = 750;
+                    throwVelocityX1 = -throwVelocityX1 * 0.5;
+                }
+                if (player1Y > 530) {
+                    player1Y = 530;
+
+                    // 添加着陆效果
+                    createLandingEffect(player1X, player1Y);
+
+                    // 弹跳效果
+                    if (Math.abs(throwVelocityY1) > 3) {
+                        throwVelocityY1 = -throwVelocityY1 * 0.3;
+                    } else {
+                        throwVelocityY1 = 0;
+                        throwVelocityX1 *= 0.8;
+                        player1Thrown = false;
+                        clearInterval(throwInterval);
+                    }
+                }
+
+                updatePositions();
+            }, 30);
+        }
+    }
+
+    // 键盘控制
+    document.addEventListener('keydown', (e) => {
+        // 如果游戏结束并且按下回车键，开始新游戏
+        if (isGameOver && (e.key === 'Enter' || e.keyCode === 13)) {
+            const resultPanel = document.getElementById('result-panel');
+            if (resultPanel) {
+                resultPanel.style.transform = 'scale(0)';
+                setTimeout(() => {
+                    if (resultPanel.parentNode) {
+                        resultPanel.parentNode.removeChild(resultPanel);
+                    }
+                    startGame();
+                }, 500);
+            }
+            return;
+        }
+
+        if (isGameOver) return;
+
+        keysPressed[e.key] = true;
+
+        // 更新行走动画状态
+        updateWalkingState();
+
+        // 玩家1控制 (WSAD)
+        if (!player2Carrying && !player1Thrown && !player1Died) {
+            switch(e.key.toLowerCase()) {
+                case 'a':
+                    player1Direction = 4; // 左
+                    break;
+                case 'd':
+                    player1Direction = 2; // 右
+                    break;
+                case 'w':
+                    player1Direction = 1; // 上
+                    break;
+                case 's':
+                    player1Direction = 3; // 下
+                    break;
+                case '1': // 使用平底锅
+                    usePan(1);
+                    break;
+                case '2': // 使用流星锤
+                    useHammer(1);
+                    break;
+                case '3': // 使用医疗包
+                    useMedkit(1);
+                    break;
+                case 't': // 殴打
+                    punch(1);
+                    break;
+            }
+        }
+
+        // 玩家2控制 (方向键)
+        if (!player1Carrying && !player2Thrown && !player2Died) {
+            switch(e.key) {
+                case 'ArrowLeft':
+                    player2Direction = 4; // 左
+                    break;
+                case 'ArrowRight':
+                    player2Direction = 2; // 右
+                    break;
+                case 'ArrowUp':
+                    player2Direction = 1; // 上
+                    break;
+                case 'ArrowDown':
+                    player2Direction = 3; // 下
+                    break;
+                case '8': // 使用平底锅
+                    usePan(2);
+                    break;
+                case '9': // 使用流星锤
+                    useHammer(2);
+                    break;
+                case '0': // 使用医疗包
+                    useMedkit(2);
+                    break;
+                case 'o':
+                case 'O': // 殴打
+                    punch(2);
+                    break;
+            }
+        }
+
+        // 抱起功能
+        if (e.key === 'r' || e.key === 'R') {
+            e.preventDefault(); // 防止浏览器默认行为
+            // R键用于左玩家 (按下时抱起)
+            if (!player2Carrying && !player1Carrying && !player1Died && !player2Died) {
+                tryToCarry(1);
+            }
+        }
+        if (e.key === 'p' || e.key === 'P') {
+            e.preventDefault(); // 防止浏览器默认行为
+            // P键用于右玩家 (按下时抱起)
+            if (!player1Carrying && !player2Carrying && !player1Died && !player2Died) {
+                tryToCarry(2);
+            }
+        }
+
+        updateShieldPosition();
+    });
+
+    // 键盘松开监听（用于抛出功能）
+    document.addEventListener('keyup', (e) => {
+        keysPressed[e.key] = false;
+
+        // 更新行走动画状态
+        updateWalkingState();
+
+        // 松开R键时抛出
+        if ((e.key === 'r' || e.key === 'R') && player1Carrying) {
+            throwPlayer(1);
+        }
+
+        // 松开P键时抛出
+        if ((e.key === 'p' || e.key === 'P') && player2Carrying) {
+            throwPlayer(2);
+        }
+    });
+
+    function updateWalkingState() {
+        const player1Moving = keysPressed['w'] || keysPressed['W'] ||
+            keysPressed['a'] || keysPressed['A'] ||
+            keysPressed['s'] || keysPressed['S'] ||
+            keysPressed['d'] || keysPressed['D'];
+
+        const player2Moving = keysPressed['ArrowUp'] || keysPressed['ArrowDown'] ||
+            keysPressed['ArrowLeft'] || keysPressed['ArrowRight'];
+
+        if (player1Moving && !player1Walking && !player1Thrown && !player2Carrying && !player1Died) {
+            player1Walking = true;
+            player1.classList.add('walking');
+        } else if (!player1Moving && player1Walking) {
+            player1Walking = false;
+            player1.classList.remove('walking');
+        }
+
+        if (player2Moving && !player2Walking && !player2Thrown && !player1Carrying && !player2Died) {
+            player2Walking = true;
+            player2.classList.add('walking');
+        } else if (!player2Moving && player2Walking) {
+            player2Walking = false;
+            player2.classList.remove('walking');
+        }
+    }
+
+    function tryToCarry(playerNum) {
+        const carrier = playerNum === 1 ? player1 : player2;
+        const target = playerNum === 1 ? player2 : player1;
+        const carrierX = playerNum === 1 ? player1X : player2X;
+        const carrierY = playerNum === 1 ? player1Y : player2Y;
+        const targetX = playerNum === 1 ? player2X : player1X;
+        const targetY = playerNum === 1 ? player2Y : player1Y;
+
+        // 如果目标玩家已经死亡，不能抱起
+        if ((playerNum === 1 && player2Died) || (playerNum === 2 && player1Died)) {
+            return;
+        }
+
+        // 检查是否在抱起范围内（100像素）
+        const distance = Math.sqrt(
+            Math.pow(carrierX - targetX, 2) +
+            Math.pow(carrierY - targetY, 2)
+        );
+
+        if (distance < 70) {
+            if (playerNum === 1) {
+                player1Carrying = true;
+                player2.classList.add('carried');
+                player2.classList.add('carried-position');
+                player1.classList.add('carrying');
+
+                // 抱起效果
+                player2.style.transition = 'transform 0.3s, opacity 0.3s';
+                player1.querySelector('.arm.left').style.transition = 'transform 0.3s';
+                player1.querySelector('.arm.right').style.transition = 'transform 0.3s';
+            } else {
+                player2Carrying = true;
+                player1.classList.add('carried');
+                player1.classList.add('carried-position');
+                player2.classList.add('carrying');
+
+                // 抱起效果
+                player1.style.transition = 'transform 0.3s, opacity 0.3s';
+                player2.querySelector('.arm.left').style.transition = 'transform 0.3s';
+                player2.querySelector('.arm.right').style.transition = 'transform 0.3s';
+            }
+        }
+    }
+
+    // 检测玩家碰撞并实现推开效果
+    function checkPlayerCollision() {
+        if (player1Died || player2Died || player1Carrying || player2Carrying || player1Thrown || player2Thrown) {
+            return;
+        }
+
+        // 玩家碰撞半径（两个玩家之间的最小距离）
+        const minDistance = 50;
+
+        // 计算两个玩家之间的距离
+        const dx = player2X - player1X;
+        const dy = player2Y - player1Y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        // 如果玩家重叠
+        if (distance < minDistance) {
+            // 计算重叠量
+            const overlap = minDistance - distance;
+
+            // 计算单位向量（从玩家1指向玩家2的方向）
+            let unitX = dx / distance;
+            let unitY = dy / distance;
+
+            // 如果距离非常小，避免除以0，设置一个默认的推开方向
+            if (distance < 1) {
+                unitX = 1;
+                unitY = 0;
+            }
+
+            // 计算推力（与相对速度和重叠量成比例）
+            const p1Force = 0.3 * overlap;
+            const p2Force = 0.3 * overlap;
+
+            // 应用推力，移开两个玩家
+            if (!player1Died) {
+                player1VelX -= unitX * p1Force;
+                player1VelY -= unitY * p1Force;
+            }
+
+            if (!player2Died) {
+                player2VelX += unitX * p2Force;
+                player2VelY += unitY * p2Force;
+            }
+
+            // 碰撞闪烁效果
+            if (Math.random() < 0.1 && !player1.classList.contains('player-collision') && !player2.classList.contains('player-collision')) {
+                player1.classList.add('player-collision');
+                player2.classList.add('player-collision');
+
+                setTimeout(() => {
+                    player1.classList.remove('player-collision');
+                    player2.classList.remove('player-collision');
+                }, 300);
+            }
+        }
+    }
+
+    // 游戏主循环
+    function gameMainLoop() {
+        if (isGameOver) return;
+
+        // 更新游戏时间
+        updateGameTime();
+
+        // 玩家1运动物理
+        if (!player2Carrying && !player1Thrown && !player1Died) {
+            // 添加加速度
+            if (keysPressed['a'] || keysPressed['A']) {
+                player1VelX -= acceleration;
+            }
+            if (keysPressed['d'] || keysPressed['D']) {
+                player1VelX += acceleration;
+            }
+            if (keysPressed['w'] || keysPressed['W']) {
+                player1VelY -= acceleration;
+            }
+            if (keysPressed['s'] || keysPressed['S']) {
+                player1VelY += acceleration;
+            }
+
+            // 限制最大速度
+            player1VelX = Math.max(-maxSpeed, Math.min(maxSpeed, player1VelX));
+            player1VelY = Math.max(-maxSpeed, Math.min(maxSpeed, player1VelY));
+
+            // 应用摩擦力
+            if (!keysPressed['a'] && !keysPressed['A'] && !keysPressed['d'] && !keysPressed['D']) {
+                player1VelX *= friction;
+            }
+            if (!keysPressed['w'] && !keysPressed['W'] && !keysPressed['s'] && !keysPressed['S']) {
+                player1VelY *= friction;
+            }
+
+            // 如果速度很小则停止
+            if (Math.abs(player1VelX) < 0.1) player1VelX = 0;
+            if (Math.abs(player1VelY) < 0.1) player1VelY = 0;
+
+            // 更新位置
+            player1X += player1VelX;
+            player1Y += player1VelY;
+
+            // 边界检查
+            player1X = Math.max(0, Math.min(750, player1X));
+            player1Y = Math.max(0, Math.min(530, player1Y));
+
+            // 身体倾斜效果
+            const targetRotation = player1VelX * 1.5; // 根据水平速度倾斜
+            player1BodyRotation += (targetRotation - player1BodyRotation) * 0.2; // 平滑过渡
+            player1.querySelector('.player-body').style.transform = `rotate(${player1BodyRotation}deg)`;
+        }
+
+        // 玩家2运动物理
+        if (!player1Carrying && !player2Thrown && !player2Died) {
+            // 添加加速度
+            if (keysPressed['ArrowLeft']) {
+                player2VelX -= acceleration;
+            }
+            if (keysPressed['ArrowRight']) {
+                player2VelX += acceleration;
+            }
+            if (keysPressed['ArrowUp']) {
+                player2VelY -= acceleration;
+            }
+            if (keysPressed['ArrowDown']) {
+                player2VelY += acceleration;
+            }
+
+            // 限制最大速度
+            player2VelX = Math.max(-maxSpeed, Math.min(maxSpeed, player2VelX));
+            player2VelY = Math.max(-maxSpeed, Math.min(maxSpeed, player2VelY));
+
+            // 应用摩擦力
+            if (!keysPressed['ArrowLeft'] && !keysPressed['ArrowRight']) {
+                player2VelX *= friction;
+            }
+            if (!keysPressed['ArrowUp'] && !keysPressed['ArrowDown']) {
+                player2VelY *= friction;
+            }
+
+            // 如果速度很小则停止
+            if (Math.abs(player2VelX) < 0.1) player2VelX = 0;
+            if (Math.abs(player2VelY) < 0.1) player2VelY = 0;
+
+            // 更新位置
+            player2X += player2VelX;
+            player2Y += player2VelY;
+
+            // 边界检查
+            player2X = Math.max(0, Math.min(750, player2X));
+            player2Y = Math.max(0, Math.min(530, player2Y));
+
+            // 身体倾斜效果
+            const targetRotation = player2VelX * 1.5; // 根据水平速度倾斜
+            player2BodyRotation += (targetRotation - player2BodyRotation) * 0.2; // 平滑过渡
+            player2.querySelector('.player-body').style.transform = `rotate(${player2BodyRotation}deg)`;
+        }
+
+        // 检查玩家碰撞
+        checkPlayerCollision();
+
+        updatePositions();
+        updateShieldPosition();
+
+        // 检查游戏是否已经结束（两个玩家都死亡）
+        if ((player1Died && player2Died) && !isGameOver) {
+            gameOver();
+        } else if ((player1Died && !player2Died) || (!player1Died && player2Died)) {
+            // 如果只有一个玩家死亡，检查是否已经超过3秒，如果是则宣布幸存玩家获胜
+            const now = new Date().getTime();
+
+            if (player1Died && !player2Died && player1DeathTime && now - player1DeathTime > 3000) {
+                gameOver();
+            } else if (!player1Died && player2Died && player2DeathTime && now - player2DeathTime > 3000) {
+                gameOver();
+            }
+        }
+
+        requestAnimationFrame(gameMainLoop);
+    }
+
+    function updatePositions() {
+        // 更新玩家位置
+        player1.style.left = player1X + 'px';
+        player1.style.top = player1Y + 'px';
+        player2.style.left = player2X + 'px';
+        player2.style.top = player2Y + 'px';
+
+        // 如果玩家1抱起玩家2
+        if (player1Carrying) {
+            player2X = player1X;
+            player2Y = player1Y - 50;
+        }
+
+        // 如果玩家2抱起玩家1
+        if (player2Carrying) {
+            player1X = player2X;
+            player1Y = player2Y - 50;
+        }
+    }
+
+    // 更新血量显示
+    function updateHealthDisplay() {
+        hearts1.forEach((heart, index) => {
+            if (index < health1) {
+                heart.classList.remove('empty');
+            } else {
+                heart.classList.add('empty');
+            }
+        });
+        hearts2.forEach((heart, index) => {
+            if (index < health2) {
+                heart.classList.remove('empty');
+            } else {
+                heart.classList.add('empty');
+            }
+        });
+    }
+
+    // 创建障碍物
+    function createObstacle() {
+        if (isGameOver) return;
+
+        const obstacle = document.createElement('div');
+        obstacle.className = 'obstacle';
+        obstacle.style.left = Math.random() * 770 + 'px';
+        obstacle.style.transform = 'scale(0)';
+        obstacle.setAttribute('data-hit-player1', 'false');
+        obstacle.setAttribute('data-hit-player2', 'false');
+        game.appendChild(obstacle);
+
+        setTimeout(() => {
+            obstacle.style.transform = 'scale(1)';
+        }, 10);
+
+        let topPosition = 0;
+        // 随机速度，基于当前难度级别
+        let fallSpeed = obstacleFallBaseSpeed + Math.random() * difficultyLevel;
+        const fall = setInterval(() => {
+            if (isGameOver) {
+                clearInterval(fall);
+                return;
+            }
+
+            topPosition += fallSpeed;
+            obstacle.style.top = topPosition + 'px';
+
+            // 摇摆效果
+            const sway = 5 * Math.sin(topPosition / 30);
+            obstacle.style.left = (parseFloat(obstacle.style.left) + sway/10) + 'px';
+
+            // 检测碰撞
+            if (topPosition > 600) {
+                clearInterval(fall);
+
+                // 淡出效果
+                obstacle.style.transform = 'scale(0)';
+                setTimeout(() => {
+                    if (obstacle.parentNode) {
+                        obstacle.parentNode.removeChild(obstacle);
+                    }
+                }, 300);
+            } else {
+                checkCollisionAndDamage(obstacle);
+            }
+        }, 20);
+    }
+
+    function checkCollisionAndDamage(obstacle) {
+        // 检查是否已经碰撞过该玩家，防止重复伤害
+        const hitPlayer1 = obstacle.getAttribute('data-hit-player1') === 'true';
+        const hitPlayer2 = obstacle.getAttribute('data-hit-player2') === 'true';
+
+        // 检查与保护罩的碰撞
+        if (hammer1Active && hammer1Shield && isColliding(obstacle, hammer1Shield)) {
+            // 保护罩反弹效果
+            createExplosion(parseInt(obstacle.style.left), parseInt(obstacle.style.top));
+
+            obstacle.style.transform = 'scale(0)';
+            setTimeout(() => {
+                if (obstacle.parentNode) {
+                    obstacle.parentNode.removeChild(obstacle);
+                }
+            }, 300);
+            return;
+        }
+
+        if (hammer2Active && hammer2Shield && isColliding(obstacle, hammer2Shield)) {
+            // 保护罩反弹效果
+            createExplosion(parseInt(obstacle.style.left), parseInt(obstacle.style.top));
+
+            obstacle.style.transform = 'scale(0)';
+            setTimeout(() => {
+                if (obstacle.parentNode) {
+                    obstacle.parentNode.removeChild(obstacle);
+                }
+            }, 300);
+            return;
+        }
+
+        // 检查与玩家1的碰撞
+        if (!hitPlayer1 && isColliding(obstacle, player1) && !player1Died) {
+            // 标记为已碰撞玩家1，防止重复伤害
+            obstacle.setAttribute('data-hit-player1', 'true');
+
+            takeDamage(1, 1);
+
+            // 碰撞效果
+            obstacle.style.transform = 'scale(1.5)';
+            obstacle.style.opacity = '0.5';
+            setTimeout(() => {
+                if (obstacle.parentNode) {
+                    obstacle.parentNode.removeChild(obstacle);
+                }
+            }, 200);
+
+            if (player2Carrying) {
+                takeDamage(2, 1); // 如果玩家2抱着玩家1，两个都受伤
+                player2Carrying = false;
+                player1.classList.remove('carried');
+                player1.classList.remove('carried-position');
+                player2.classList.remove('carrying');
+            }
+        }
+
+        // 检查与玩家2的碰撞
+        if (!hitPlayer2 && isColliding(obstacle, player2) && !player2Died) {
+            // 标记为已碰撞玩家2，防止重复伤害
+            obstacle.setAttribute('data-hit-player2', 'true');
+
+            takeDamage(2, 1);
+
+            // 碰撞效果
+            obstacle.style.transform = 'scale(1.5)';
+            obstacle.style.opacity = '0.5';
+            setTimeout(() => {
+                if (obstacle.parentNode) {
+                    obstacle.parentNode.removeChild(obstacle);
+                }
+            }, 200);
+
+            if (player1Carrying) {
+                takeDamage(1, 1); // 如果玩家1抱着玩家2，两个都受伤
+                player1Carrying = false;
+                player2.classList.remove('carried');
+                player2.classList.remove('carried-position');
+                player1.classList.remove('carrying');
+            }
+        }
+    }
+
+    // 处理玩家死亡
+    function playerDied(playerNum) {
+        if (playerNum === 1) {
+            player1Died = true;
+            player1.classList.add('dead');
+            createEffectText(player1X, player1Y - 20, "已阵亡!", "black");
+
+            // 记录死亡时间
+            player1DeathTime = new Date().getTime();
+
+            // 如果玩家1死亡，解除所有抱起状态
+            if (player1Carrying) {
+                player1Carrying = false;
+                player2.classList.remove('carried');
+                player2.classList.remove('carried-position');
+                player1.classList.remove('carrying');
+            }
+            if (player2Carrying) {
+                player2Carrying = false;
+                player1.classList.remove('carried');
+                player1.classList.remove('carried-position');
+                player2.classList.remove('carrying');
+            }
+
+            // 更新工具按钮状态
+            updateToolButtons();
+        } else {
+            player2Died = true;
+            player2.classList.add('dead');
+            createEffectText(player2X, player2Y - 20, "已阵亡!", "black");
+
+            // 记录死亡时间
+            player2DeathTime = new Date().getTime();
+
+            // 如果玩家2死亡，解除所有抱起状态
+            if (player2Carrying) {
+                player2Carrying = false;
+                player1.classList.remove('carried');
+                player1.classList.remove('carried-position');
+                player2.classList.remove('carrying');
+            }
+            if (player1Carrying) {
+                player1Carrying = false;
+                player2.classList.remove('carried');
+                player2.classList.remove('carried-position');
+                player1.classList.remove('carrying');
+            }
+
+            // 更新工具按钮状态
+            updateToolButtons();
+        }
+    }
+
+    // 受到伤害
+    function takeDamage(playerNum, amount = 1) {
+        const player = playerNum === 1 ? player1 : player2;
+
+        // 如果玩家已经死亡，不再处理伤害
+        if ((playerNum === 1 && player1Died) || (playerNum === 2 && player2Died)) {
+            return;
+        }
+
+        if (playerNum === 1) {
+            // 动画效果显示受伤的心
+            const lostHeartIndex = Math.floor(health1 - amount);
+            if (lostHeartIndex >= 0 && lostHeartIndex < hearts1.length) {
+                hearts1[lostHeartIndex].classList.add('heart-damage');
+                setTimeout(() => {
+                    hearts1[lostHeartIndex].classList.remove('heart-damage');
+                }, 500);
+            }
+
+            health1 -= amount;
+            if (health1 <= 0) {
+                health1 = 0;
+                playerDied(1);
+            }
+        } else {
+            // 动画效果显示受伤的心
+            const lostHeartIndex = Math.floor(health2 - amount);
+            if (lostHeartIndex >= 0 && lostHeartIndex < hearts2.length) {
+                hearts2[lostHeartIndex].classList.add('heart-damage');
+                setTimeout(() => {
+                    hearts2[lostHeartIndex].classList.remove('heart-damage');
+                }, 500);
+            }
+
+            health2 -= amount;
+            if (health2 <= 0) {
+                health2 = 0;
+                playerDied(2);
+            }
+        }
+        updateHealthDisplay();
+
+        // 闪烁红色效果
+        const playerElements = playerNum === 1 ?
+            [player1.querySelector('.torso'), player1.querySelector('.arm.left'),
+                player1.querySelector('.arm.right'), player1.querySelector('.leg.left'),
+                player1.querySelector('.leg.right')] :
+            [player2.querySelector('.torso'), player2.querySelector('.arm.left'),
+                player2.querySelector('.arm.right'), player2.querySelector('.leg.left'),
+                player2.querySelector('.leg.right')];
+
+        // 闪烁三次
+        for (let i = 0; i < 3; i++) {
+            setTimeout(() => {
+                playerElements.forEach(el => el.style.backgroundColor = 'red');
+
+                setTimeout(() => {
+                    playerElements.forEach(el => {
+                        el.style.backgroundColor = playerNum === 1 ? 'blue' : 'green';
+                    });
+                }, 100);
+            }, i * 200);
+        }
+
+        // 添加伤害效果文本
+        createEffectText(
+            (playerNum === 1 ? player1X : player2X),
+            (playerNum === 1 ? player1Y : player2Y),
+            '-' + amount
+        );
+    }
+
+    // 碰撞检测
+    function isColliding(element1, element2) {
+        const rect1 = element1.getBoundingClientRect();
+        const rect2 = element2.getBoundingClientRect();
+
+        return !(rect1.right < rect2.left ||
+            rect1.left > rect2.right ||
+            rect1.bottom < rect2.top ||
+            rect1.top > rect2.bottom);
+    }
+
+    // 游戏结束
+    function gameOver() {
+        isGameOver = true;
+        if (obstacleTimerId) {
+            clearInterval(obstacleTimerId);
+            obstacleTimerId = null;
+        }
+
+        // 根据结果分配积分
+        let winner = "";
+        if (player1Died && player2Died) {
+            // 如果两个玩家都死亡，比较死亡时间
+            if (player1DeathTime < player2DeathTime) {
+                winner = "玩家2获胜！";
+                totalScore2 += 20; // 赢家获得20积分
+                totalScore1 += 10; // 输家获得10积分
+            } else if (player2DeathTime < player1DeathTime) {
+                winner = "玩家1获胜！";
+                totalScore1 += 20; // 赢家获得20积分
+                totalScore2 += 10; // 输家获得10积分
+            } else {
+                winner = "平局！";
+                totalScore1 += 15; // 平局各得15积分
+                totalScore2 += 15;
+            }
+        } else if (player1Died) {
+            winner = "玩家2获胜！";
+            totalScore2 += 20; // 赢家获得20积分
+            totalScore1 += 10; // 输家获得10积分
+        } else if (player2Died) {
+            winner = "玩家1获胜！";
+            totalScore1 += 20; // 赢家获得20积分
+            totalScore2 += 10; // 输家获得10积分
+        } else {
+            winner = "平局！";
+            totalScore1 += 15; // 平局各得15积分
+            totalScore2 += 15;
+        }
+
+        totalScore1Element.textContent = totalScore1;
+        totalScore2Element.textContent = totalScore2;
+
+        // 创建结果面板
+        const resultPanel = document.createElement('div');
+        resultPanel.id = 'result-panel';
+        resultPanel.innerHTML = `
+            <h2 style="color: yellow; margin-bottom: 20px;">游戏结束！${winner}</h2>
+            <div style="display: flex; justify-content: space-around; margin-bottom: 15px;">
+                <div>
+                    <h3 style="color: lightblue;">玩家1</h3>
+                    <p>本局得分: ${player1Died ? "10" : "20"}</p>
+                    <p>累计积分: ${totalScore1}</p>
+                    <p>剩余生命: ${health1}</p>
+                </div>
+                <div>
+                    <h3 style="color: lightgreen;">玩家2</h3>
+                    <p>本局得分: ${player2Died ? "10" : "20"}</p>
+                    <p>累计积分: ${totalScore2}</p>
+                    <p>剩余生命: ${health2}</p>
+                </div>
+            </div>
+            <p style="margin-top: 20px; color: yellow; font-weight: bold;">按回车键开始新游戏</p>
+        `;
+
+        game.appendChild(resultPanel);
+
+        // 动画效果显示面板
+        setTimeout(() => {
+            resultPanel.style.transform = 'scale(1)';
+        }, 100);
+    }
+
+    // 开始游戏
+    function startGame() {
+        // 初始化键盘状态对象
+        for (const key in keysPressed) {
+            keysPressed[key] = false;
+        }
+
+        // 清除所有障碍物
+        const obstacles = document.querySelectorAll('.obstacle');
+        obstacles.forEach(obstacle => obstacle.remove());
+
+        // 清除所有子弹
+        const bullets = document.querySelectorAll('.bullet');
+        bullets.forEach(bullet => bullet.remove());
+
+        // 清除保护罩
+        if (hammer1Shield && hammer1Shield.parentNode) {
+            hammer1Shield.parentNode.removeChild(hammer1Shield);
+        }
+        if (hammer2Shield && hammer2Shield.parentNode) {
+            hammer2Shield.parentNode.removeChild(hammer2Shield);
+        }
+
+        // 清除平底锅效果
+        if (pan1Effect && pan1Effect.parentNode) {
+            pan1Effect.parentNode.removeChild(pan1Effect);
+        }
+        if (pan2Effect && pan2Effect.parentNode) {
+            pan2Effect.parentNode.removeChild(pan2Effect);
+        }
+
+        // 清除定时器
+        if (pan1Timeout) {
+            clearTimeout(pan1Timeout);
+        }
+        if (pan2Timeout) {
+            clearTimeout(pan2Timeout);
+        }
+
+        // 清除所有特效
+        const effects = document.querySelectorAll('.player-trail, .effect-text, .explosion, .medkit-effect, .frying-pan-active');
+        effects.forEach(effect => effect.remove());
+
+        isGameOver = false;
+        score1 = 0;
+        score2 = 0;
+        health1 = 10;
+        health2 = 10;
+        player1Carrying = false;
+        player2Carrying = false;
+        player1Thrown = false;
+        player2Thrown = false;
+        hammer1Active = false;
+        hammer2Active = false;
+        hammer1Shield = null;
+        hammer2Shield = null;
+        pan1Active = false;
+        pan2Active = false;
+        pan1Effect = null;
+        pan2Effect = null;
+        player1VelX = 0;
+        player1VelY = 0;
+        player2VelX = 0;
+        player2VelY = 0;
+        player1Walking = false;
+        player2Walking = false;
+        player1BodyRotation = 0;
+        player2BodyRotation = 0;
+        player1Died = false;
+        player2Died = false;
+        player1DeathTime = null;
+        player2DeathTime = null;
+
+        // 重置难度系统
+        gameStartTime = new Date().getTime();
+        gameCurrentTime = 0;
+        difficultyLevel = 1;
+        obstacleFallBaseSpeed = 3;
+        obstacleSpawnInterval = 1000;
+        obstacleSpawnCount = 1;
+
+        // 更新游戏时间显示
+        updateGameTime();
+
+        score1Element.textContent = score1;
+        score2Element.textContent = score2;
+        updateHealthDisplay();
+        updateToolButtons();
+
+        player1X = 175;
+        player1Y = 480;
+        player2X = 575;
+        player2Y = 480;
+        player1Direction = 2;
+        player2Direction = 4;
+
+        player1.style.left = player1X + 'px';
+        player1.style.top = player1Y + 'px';
+        player1.querySelector('.player-body').style.transform = 'rotate(0deg)';
+        player2.style.left = player2X + 'px';
+        player2.style.top = player2Y + 'px';
+        player2.querySelector('.player-body').style.transform = 'rotate(0deg)';
+
+        player1.classList.remove('carried', 'carrying', 'punching', 'hit', 'carried-position', 'walking', 'dead', 'player-collision');
+        player2.classList.remove('carried', 'carrying', 'punching', 'hit', 'carried-position', 'walking', 'dead', 'player-collision');
+
+        // 恢复颜色
+        player1.querySelector('.torso').style.backgroundColor = 'blue';
+        player1.querySelector('.arm.left').style.backgroundColor = 'blue';
+        player1.querySelector('.arm.right').style.backgroundColor = 'blue';
+        player1.querySelector('.leg.left').style.backgroundColor = 'blue';
+        player1.querySelector('.leg.right').style.backgroundColor = 'blue';
+
+        player2.querySelector('.torso').style.backgroundColor = 'green';
+        player2.querySelector('.arm.left').style.backgroundColor = 'green';
+        player2.querySelector('.arm.right').style.backgroundColor = 'green';
+        player2.querySelector('.leg.left').style.backgroundColor = 'green';
+        player2.querySelector('.leg.right').style.backgroundColor = 'green';
+
+        // 开始生成障碍物
+        if (obstacleTimerId) {
+            clearInterval(obstacleTimerId);
+        }
+        obstacleTimerId = setInterval(() => {
+            for (let i = 0; i < obstacleSpawnCount; i++) {
+                createObstacle();
+            }
+        }, obstacleSpawnInterval);
+
+        // 重启游戏主循环
+        requestAnimationFrame(gameMainLoop);
+    }
+
+    // 初始化
+    updateToolButtons();
+    startGame();
+</script>
+</body>
+</html>

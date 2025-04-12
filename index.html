@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>双人躲避游戏</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div id="stats">
+    <div class="player-stats">
+        <div>玩家1累计积分: <span id="totalScore1" class="total-score">0</span></div>
+        <div class="current-game">本局分数: <span id="scoreValue1">0</span></div>
+        <div class="health" id="health1">
+            <div class="heart p1-heart"></div>
+            <div class="heart p1-heart"></div>
+            <div class="heart p1-heart"></div>
+            <div class="heart p1-heart"></div>
+            <div class="heart p1-heart"></div>
+            <div class="heart p1-heart"></div>
+            <div class="heart p1-heart"></div>
+            <div class="heart p1-heart"></div>
+            <div class="heart p1-heart"></div>
+            <div class="heart p1-heart"></div>
+        </div>
+        <div class="player-tools">
+            <button id="pan1" class="tool-button" disabled>平底锅 (0)</button>
+            <button id="hammer1" class="tool-button" disabled>流星锤 (0)</button>
+            <button id="medkit1" class="tool-button" disabled>医疗包 (0)</button>
+        </div>
+    </div>
+    <div class="player-stats">
+        <div>玩家2累计积分: <span id="totalScore2" class="total-score">0</span></div>
+        <div class="current-game">本局分数: <span id="scoreValue2">0</span></div>
+        <div class="health" id="health2">
+            <div class="heart p2-heart"></div>
+            <div class="heart p2-heart"></div>
+            <div class="heart p2-heart"></div>
+            <div class="heart p2-heart"></div>
+            <div class="heart p2-heart"></div>
+            <div class="heart p2-heart"></div>
+            <div class="heart p2-heart"></div>
+            <div class="heart p2-heart"></div>
+            <div class="heart p2-heart"></div>
+            <div class="heart p2-heart"></div>
+        </div>
+        <div class="player-tools">
+            <button id="pan2" class="tool-button" disabled>平底锅 (0)</button>
+            <button id="hammer2" class="tool-button" disabled>流星锤 (0)</button>
+            <button id="medkit2" class="tool-button" disabled>医疗包 (0)</button>
+        </div>
+    </div>
+</div>
+<div id="game">
+    <div id="game-time">游戏时间: 00:00</div>
+    <div class="difficulty-indicator">难度增加！</div>
+    <div id="player1" class="player">
+        <div class="player-name">P1</div>
+        <div class="player-body">
+            <div class="head"></div>
+            <div class="torso"></div>
+            <div class="arm left"></div>
+            <div class="arm right"></div>
+            <div class="leg left"></div>
+            <div class="leg right"></div>
+        </div>
+    </div>
+    <div id="player2" class="player">
+        <div class="player-name">P2</div>
+        <div class="player-body">
+            <div class="head"></div>
+            <div class="torso"></div>
+            <div class="arm left"></div>
+            <div class="arm right"></div>
+            <div class="leg left"></div>
+            <div class="leg right"></div>
+        </div>
+    </div>
+</div>
+<div id="controls">
+    玩家1: WSAD键移动, 左R抱起/抛出, T殴打, 1使用平底锅, 2使用流星锤, 3使用医疗包 | 玩家2: ↑↓←→移动, 右P抱起/抛出, O殴打, 8使用平底锅, 9使用流星锤, 0使用医疗包
+</div>
+
+<button id="shop-button">打开商店</button>
+
+<div id="shop-modal">
+    <div class="shop-content">
+        <span class="close-shop">&times;</span>
+        <h2>游戏商店</h2>
+        <div class="shop-tabs">
+            <button id="p1-tab" class="active">玩家1</button>
+            <button id="p2-tab">玩家2</button>
+        </div>
+        <div id="p1-shop" class="shop-items">
+            <div class="shop-item">
+                <div class="item-icon">🍳</div>
+                <h3>平底锅</h3>
+                <p>增强殴打伤害</p>
+                <p>价格: 10积分</p>
+                <div class="item-count">拥有: <span id="p1-pan-count">0</span></div>
+                <button id="buy-pan-p1" class="buy-button">购买</button>
+            </div>
+            <div class="shop-item">
+                <div class="item-icon">🔮</div>
+                <h3>流星锤</h3>
+                <p>创建保护罩抵挡障碍物</p>
+                <p>价格: 20积分</p>
+                <div class="item-count">拥有: <span id="p1-hammer-count">0</span></div>
+                <button id="buy-hammer-p1" class="buy-button">购买</button>
+            </div>
+            <div class="shop-item">
+                <div class="item-icon">🩹</div>
+                <h3>医疗包</h3>
+                <p>完全恢复生命值/复活</p>
+                <p>价格: 30积分</p>
+                <div class="item-count">拥有: <span id="p1-medkit-count">0</span></div>
+                <button id="buy-medkit-p1" class="buy-button">购买</button>
+            </div>
+        </div>
+        <div id="p2-shop" class="shop-items" style="display:none;">
+            <div class="shop-item">
+                <div class="item-icon">🍳</div>
+                <h3>平底锅</h3>
+                <p>增强殴打伤害</p>
+                <p>价格: 10积分</p>
+                <div class="item-count">拥有: <span id="p2-pan-count">0</span></div>
+                <button id="buy-pan-p2" class="buy-button">购买</button>
+            </div>
+            <div class="shop-item">
+                <div class="item-icon">🔮</div>
+                <h3>流星锤</h3>
+                <p>创建保护罩抵挡障碍物</p>
+                <p>价格: 20积分</p>
+                <div class="item-count">拥有: <span id="p2-hammer-count">0</span></div>
+                <button id="buy-hammer-p2" class="buy-button">购买</button>
+            </div>
+            <div class="shop-item">
+                <div class="item-icon">🩹</div>
+                <h3>医疗包</h3>
+                <p>完全恢复生命值/复活</p>
+                <p>价格: 30积分</p>
+                <div class="item-count">拥有: <span id="p2-medkit-count">0</span></div>
+                <button id="buy-medkit-p2" class="buy-button">购买</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript 文件导入 -->
+<script src="js/config.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/player.js"></script>
+<script src="js/obstacles.js"></script>
+<script src="js/items.js"></script>
+<script src="js/shop.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
