@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8"> <!-- 设置字符编码为 UTF-8 -->
-    <title>3D 迷宫游戏</title>
+    <meta charset="UTF-8">
+    <title>3D 迷宫游戏 - 关卡版</title>
     <style>
         body { margin: 0; }
         canvas { display: block; }
@@ -17,11 +17,26 @@
             padding: 10px;
             border-radius: 5px;
         }
+        #levelDisplay {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            color: white;
+            font-family: Arial;
+            font-size: 16px;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
-<div id="info">时间: <span id="timer">0</span>秒</div>
+<div id="info">
+    当前关卡时间: <span id="timer">0</span>秒<br>
+    总游戏时间: <span id="totalTimer">0</span>秒
+</div>
+<div id="levelDisplay">关卡: <span id="level">1</span></div>
 <script>
     // 初始化场景、相机和渲染器
     const scene = new THREE.Scene();
@@ -30,64 +45,331 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // 迷宫大小
-    const MAZE_SIZE = 15;
+    // 游戏状态变量
+    let currentLevel = 1;
     let maze = [];
+    let mazeSize = 15; // 初始迷宫大小
     let playerPos = { x: 1, z: 1 };
-    let devilPos = { x: MAZE_SIZE-2, z: MAZE_SIZE-2 };
     let startTime = Date.now();
+    let totalTime = 0;
+    let levelStartTime = Date.now();
     let gameOver = false;
+    let wallObjects = []; // 存储所有墙壁对象
+    let playerObject = null;
+    let goalObject = null;
 
-    // 生成迷宫
-    function generateMaze() {
-        // 初始化迷宫数组
-        for(let i = 0; i < MAZE_SIZE; i++) {
-            maze[i] = [];
-            for(let j = 0; j < MAZE_SIZE; j++) {
-                maze[i][j] = 1; // 1表示墙
+    // 找到一条从起点到终点的路径
+    function findPath(startX, startZ, endX, endZ) {
+        const visited = Array(mazeSize).fill().map(() => Array(mazeSize).fill(false));
+        const parent = {}; // 用来回溯路径
+
+        const queue = [{x: startX, z: startZ}];
+        visited[startX][startZ] = true;
+
+        while (queue.length > 0) {
+            const current = queue.shift();
+            const {x, z} = current;
+
+            if (x === endX && z === endZ) {
+                // 找到路径，回溯
+                const path = [];
+                let currentPos = `${endX},${endZ}`;
+
+                while (currentPos !== `${startX},${startZ}`) {
+                    const [cx, cz] = currentPos.split(',').map(Number);
+                    path.unshift({x: cx, z: cz});
+                    currentPos = parent[currentPos];
+                }
+
+                path.unshift({x: startX, z: startZ});
+                return path;
             }
-        }
 
-        function carve(x, z) {
-            maze[x][z] = 0; // 0表示路
-            const directions = [[0,2], [2,0], [0,-2], [-2,0]];
-            directions.sort(() => Math.random() - 0.5);
+            // 检查四个方向
+            const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+            for (const [dx, dz] of directions) {
+                const newX = x + dx;
+                const newZ = z + dz;
 
-            for(let [dx, dz] of directions) {
-                let newX = x + dx;
-                let newZ = z + dz;
-                if(newX > 0 && newX < MAZE_SIZE-1 && newZ > 0 && newZ < MAZE_SIZE-1 && maze[newX][newZ] === 1) {
-                    maze[x + dx/2][z + dz/2] = 0;
-                    carve(newX, newZ);
+                if (newX >= 0 && newX < mazeSize &&
+                    newZ >= 0 && newZ < mazeSize &&
+                    maze[newX][newZ] === 0 &&
+                    !visited[newX][newZ]) {
+                    queue.push({x: newX, z: newZ});
+                    visited[newX][newZ] = true;
+                    parent[`${newX},${newZ}`] = `${x},${z}`;
                 }
             }
         }
 
-        carve(1, 1);
-        maze[MAZE_SIZE-2][MAZE_SIZE-2] = 0; // 终点
+        return null; // 没有找到路径
+    }
+
+    // 生成迷宫
+    function generateMaze() {
+        // 初始化迷宫数组
+        maze = [];
+        for(let i = 0; i < mazeSize; i++) {
+            maze[i] = [];
+            for(let j = 0; j < mazeSize; j++) {
+                maze[i][j] = 1; // 1表示墙
+            }
+        }
+
+        // 首先，生成一个没有环的基础迷宫（树形结构）
+        function createBaseMaze() {
+            // 使用随机广度优先搜索生成迷宫
+            const cells = [];
+            for(let i = 1; i < mazeSize; i += 2) {
+                for(let j = 1; j < mazeSize; j += 2) {
+                    cells.push({x: i, z: j});
+                }
+            }
+
+            // 随机打乱单元格
+            for(let i = 0; i < cells.length; i++) {
+                const j = i + Math.floor(Math.random() * (cells.length - i));
+                [cells[i], cells[j]] = [cells[j], cells[i]];
+            }
+
+            // 使用并查集算法连接单元格
+            const parent = {};
+            const rank = {};
+
+            // 初始化
+            for(let i = 1; i < mazeSize; i += 2) {
+                for(let j = 1; j < mazeSize; j += 2) {
+                    const key = `${i},${j}`;
+                    parent[key] = key;
+                    rank[key] = 0;
+                }
+            }
+
+            // 查找根
+            function find(x) {
+                if(parent[x] !== x) {
+                    parent[x] = find(parent[x]);
+                }
+                return parent[x];
+            }
+
+            // 合并两个集合
+            function union(x, y) {
+                const rootX = find(x);
+                const rootY = find(y);
+
+                if(rootX === rootY) return false;
+
+                if(rank[rootX] < rank[rootY]) {
+                    parent[rootX] = rootY;
+                } else if(rank[rootX] > rank[rootY]) {
+                    parent[rootY] = rootX;
+                } else {
+                    parent[rootY] = rootX;
+                    rank[rootX]++;
+                }
+                return true;
+            }
+
+            // 连接相邻单元格
+            for(const cell of cells) {
+                const {x, z} = cell;
+                maze[x][z] = 0; // 标记为通道
+
+                // 可能的方向
+                const directions = [
+                    {dx: 0, dz: 2},  // 下
+                    {dx: 2, dz: 0},  // 右
+                    {dx: 0, dz: -2}, // 上
+                    {dx: -2, dz: 0}  // 左
+                ];
+
+                // 随机打乱方向
+                for(let i = 0; i < directions.length; i++) {
+                    const j = i + Math.floor(Math.random() * (directions.length - i));
+                    [directions[i], directions[j]] = [directions[j], directions[i]];
+                }
+
+                for(const {dx, dz} of directions) {
+                    const newX = x + dx;
+                    const newZ = z + dz;
+
+                    if(newX > 0 && newX < mazeSize-1 &&
+                        newZ > 0 && newZ < mazeSize-1) {
+                        const currentKey = `${x},${z}`;
+                        const newKey = `${newX},${newZ}`;
+
+                        if(union(currentKey, newKey)) {
+                            // 打通墙壁
+                            maze[x + dx/2][z + dz/2] = 0;
+                            maze[newX][newZ] = 0;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 生成基础迷宫
+        createBaseMaze();
+
+        // 确保起点和终点是通道
+        maze[1][1] = 0; // 起点
+        maze[mazeSize-2][mazeSize-2] = 0; // 终点
+
+        // 根据当前关卡调整迷宫复杂度
+        const complexity = Math.min(0.8, 0.3 + (currentLevel * 0.05)); // 随着关卡增加复杂度
+        const additionalPaths = Math.floor(mazeSize * complexity);
+
+        // 获取终点到起点的唯一路径
+        const pathToEnd = findPath(1, 1, mazeSize-2, mazeSize-2);
+        if (!pathToEnd) return false; // 确保生成了有效的基础迷宫
+
+        // 将路径上的点加入集合，作为"保护区"
+        const protectedArea = new Set();
+
+        // 关卡越高，保护区域越小，难度越大
+        const protectionLength = Math.max(2, Math.ceil(pathToEnd.length / (1 + currentLevel * 0.5)));
+        for (let i = pathToEnd.length - 1; i >= pathToEnd.length - protectionLength && i >= 0; i--) {
+            const {x, z} = pathToEnd[i];
+            protectedArea.add(`${x},${z}`);
+        }
+
+        // 添加额外通道
+        for (let i = 0; i < additionalPaths; i++) {
+            let attempts = 0;
+            while (attempts < 50) {
+                attempts++;
+
+                // 选择随机位置
+                const x = Math.floor(Math.random() * (mazeSize-2)) + 1;
+                const z = Math.floor(Math.random() * (mazeSize-2)) + 1;
+
+                // 跳过保护区域
+                if (protectedArea.has(`${x},${z}`)) continue;
+
+                // 只考虑墙壁
+                if (maze[x][z] === 0) continue;
+
+                // 检查是否是上下或左右都有通道的墙
+                let unprotectedNeighbors = 0;
+                let horizontalPassage = false;
+                let verticalPassage = false;
+
+                // 水平墙
+                if (x > 0 && x < mazeSize-1 && maze[x-1][z] === 0 && maze[x+1][z] === 0) {
+                    horizontalPassage = true;
+
+                    // 检查是否连接的都是非保护区域
+                    if (!protectedArea.has(`${x-1},${z}`) && !protectedArea.has(`${x+1},${z}`)) {
+                        unprotectedNeighbors++;
+                    }
+                }
+
+                // 垂直墙
+                if (z > 0 && z < mazeSize-1 && maze[x][z-1] === 0 && maze[x][z+1] === 0) {
+                    verticalPassage = true;
+
+                    // 检查是否连接的都是非保护区域
+                    if (!protectedArea.has(`${x},${z-1}`) && !protectedArea.has(`${x},${z+1}`)) {
+                        unprotectedNeighbors++;
+                    }
+                }
+
+                // 只打通完全不影响保护区域的墙
+                if ((horizontalPassage || verticalPassage) && unprotectedNeighbors > 0) {
+                    maze[x][z] = 0; // 打通墙壁
+                    break;
+                }
+            }
+        }
+
+        // 添加一些死胡同，随着关卡增加死胡同数量
+        const deadEndFactor = Math.min(2.5, 1.0 + (currentLevel * 0.15));
+        const deadEnds = Math.floor(mazeSize * deadEndFactor);
+        for (let i = 0; i < deadEnds; i++) {
+            let attempts = 0;
+            while (attempts < 50) {
+                attempts++;
+
+                // 选择随机位置
+                const x = Math.floor(Math.random() * (mazeSize-3)) + 2;
+                const z = Math.floor(Math.random() * (mazeSize-3)) + 2;
+
+                // 跳过保护区域和现有通道
+                if (protectedArea.has(`${x},${z}`) || maze[x][z] === 0) continue;
+
+                // 检查周围是否只有一个通道
+                const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+                let passages = 0;
+                let passageDir = null;
+
+                for (const [dx, dz] of directions) {
+                    if (maze[x+dx][z+dz] === 0) {
+                        passages++;
+                        passageDir = {dx, dz};
+                    }
+                }
+
+                // 如果周围只有一个通道，创建死胡同
+                if (passages === 1 && passageDir) {
+                    maze[x][z] = 0; // 创建死胡同
+                    break;
+                }
+            }
+        }
+
+        // 确保起点和终点仍然是通道
+        maze[1][1] = 0;
+        maze[mazeSize-2][mazeSize-2] = 0;
+
+        // 再次检查是否有从起点到终点的路径
+        return !!findPath(1, 1, mazeSize-2, mazeSize-2);
+    }
+
+    // 清除场景中的迷宫对象
+    function clearMaze() {
+        // 移除所有墙壁
+        for (let i = 0; i < wallObjects.length; i++) {
+            scene.remove(wallObjects[i]);
+        }
+        wallObjects = [];
+
+        // 移除玩家和终点
+        if (playerObject) scene.remove(playerObject);
+        if (goalObject) scene.remove(goalObject);
     }
 
     // 创建迷宫
     function createMaze() {
-        generateMaze();
+        // 清除旧的迷宫
+        clearMaze();
+
+        // 尝试生成迷宫直到成功
+        while (!generateMaze()) {
+            // 继续尝试，直到生成有效迷宫
+        }
 
         // 地板
-        const floorGeometry = new THREE.PlaneGeometry(MAZE_SIZE, MAZE_SIZE);
-        const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x808080, side: THREE.DoubleSide });
-        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-        floor.rotation.x = Math.PI / 2;
-        scene.add(floor);
+        if (!scene.getObjectByName("floor")) {
+            const floorGeometry = new THREE.PlaneGeometry(50, 50);
+            const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x808080, side: THREE.DoubleSide });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = Math.PI / 2;
+            floor.name = "floor";
+            scene.add(floor);
+        }
 
         // 墙壁
         const wallGeometry = new THREE.BoxGeometry(1, 1, 1);
         const wallMaterial = new THREE.MeshPhongMaterial({ color: 0x808080 });
 
-        for(let i = 0; i < MAZE_SIZE; i++) {
-            for(let j = 0; j < MAZE_SIZE; j++) {
+        for(let i = 0; i < mazeSize; i++) {
+            for(let j = 0; j < mazeSize; j++) {
                 if(maze[i][j] === 1) {
                     const wall = new THREE.Mesh(wallGeometry, wallMaterial);
-                    wall.position.set(i - MAZE_SIZE/2, 0.5, j - MAZE_SIZE/2);
+                    wall.position.set(i - mazeSize/2, 0.5, j - mazeSize/2);
                     scene.add(wall);
+                    wallObjects.push(wall);
                 }
             }
         }
@@ -95,23 +377,52 @@
         // 玩家
         const playerGeometry = new THREE.SphereGeometry(0.3);
         const playerMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
-        window.player = new THREE.Mesh(playerGeometry, playerMaterial);
-        player.position.set(playerPos.x - MAZE_SIZE/2, 0.3, playerPos.z - MAZE_SIZE/2);
-        scene.add(player);
+        playerObject = new THREE.Mesh(playerGeometry, playerMaterial);
+        playerObject.position.set(playerPos.x - mazeSize/2, 0.3, playerPos.z - mazeSize/2);
+        scene.add(playerObject);
 
-        // 魔鬼
-        const devilGeometry = new THREE.SphereGeometry(0.3);
-        const devilMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
-        window.devil = new THREE.Mesh(devilGeometry, devilMaterial);
-        devil.position.set(devilPos.x - MAZE_SIZE/2, 0.3, devilPos.z - MAZE_SIZE/2);
-        scene.add(devil);
-
-        // 终点
+        // 终点 - 随着级别增加颜色变化
+        const hue = (currentLevel * 30) % 360;
         const goalGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-        const goalMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00 });
-        const goal = new THREE.Mesh(goalGeometry, goalMaterial);
-        goal.position.set(MAZE_SIZE-2 - MAZE_SIZE/2, 0.25, MAZE_SIZE-2 - MAZE_SIZE/2);
-        scene.add(goal);
+        const goalMaterial = new THREE.MeshPhongMaterial({ color: new THREE.Color(`hsl(${hue}, 100%, 50%)`) });
+        goalObject = new THREE.Mesh(goalGeometry, goalMaterial);
+        goalObject.position.set(mazeSize-2 - mazeSize/2, 0.25, mazeSize-2 - mazeSize/2);
+        scene.add(goalObject);
+    }
+
+    // 进入下一关
+    function nextLevel() {
+        // 增加关卡
+        currentLevel++;
+        document.getElementById('level').textContent = currentLevel;
+
+        // 更新总时间
+        const levelTime = Math.floor((Date.now() - levelStartTime) / 1000);
+        totalTime += levelTime;
+
+        // 增加迷宫大小（偶数关卡增加）
+        if (currentLevel % 2 === 0 && mazeSize < 35) {
+            mazeSize += 2;
+        }
+
+        // 重置玩家位置
+        playerPos = { x: 1, z: 1 };
+
+        // 重置关卡计时器
+        levelStartTime = Date.now();
+
+        // 创建新迷宫
+        createMaze();
+
+        // 调整相机位置
+        updateCamera();
+    }
+
+    // 根据迷宫大小更新相机位置
+    function updateCamera() {
+        camera.position.y = mazeSize * 0.8;
+        camera.position.z = mazeSize * 0.8;
+        camera.lookAt(0, 0, 0);
     }
 
     // 光照
@@ -122,37 +433,8 @@
     directionalLight.position.set(10, 20, 0);
     scene.add(directionalLight);
 
-    // 相机位置
-    camera.position.y = 10;
-    camera.position.z = 10;
-    camera.lookAt(0, 0, 0);
-
-    // 魔鬼移动
-    function moveDevil() {
-        if(gameOver) return;
-
-        const directions = [[0,1], [1,0], [0,-1], [-1,0]];
-        const validMoves = directions.filter(([dx, dz]) => {
-            const newX = devilPos.x + dx;
-            const newZ = devilPos.z + dz;
-            return newX > 0 && newX < MAZE_SIZE-1 && newZ > 0 && newZ < MAZE_SIZE-1 && maze[newX][newZ] === 0;
-        });
-
-        if(validMoves.length > 0) {
-            const [dx, dz] = validMoves[Math.floor(Math.random() * validMoves.length)];
-            devilPos.x += dx;
-            devilPos.z += dz;
-            devil.position.x = devilPos.x - MAZE_SIZE/2;
-            devil.position.z = devilPos.z - MAZE_SIZE/2;
-        }
-
-        // 检查是否抓到玩家
-        if(devilPos.x === playerPos.x && devilPos.z === playerPos.z) {
-            gameOver = true;
-            alert('游戏结束！你被魔鬼抓到了！');
-            location.reload();
-        }
-    }
+    // 初始化相机位置
+    updateCamera();
 
     // 键盘控制
     document.addEventListener('keydown', (event) => {
@@ -177,15 +459,17 @@
         }
 
         if(oldX !== playerPos.x || oldZ !== playerPos.z) {
-            player.position.x = playerPos.x - MAZE_SIZE/2;
-            player.position.z = playerPos.z - MAZE_SIZE/2;
+            playerObject.position.x = playerPos.x - mazeSize/2;
+            playerObject.position.z = playerPos.z - mazeSize/2;
 
             // 检查是否到达终点
-            if(playerPos.x === MAZE_SIZE-2 && playerPos.z === MAZE_SIZE-2) {
-                gameOver = true;
-                const timeUsed = Math.floor((Date.now() - startTime) / 1000);
-                alert(`恭喜你赢了！用时: ${timeUsed}秒`);
-                location.reload();
+            if(playerPos.x === mazeSize-2 && playerPos.z === mazeSize-2) {
+                // 显示通关信息
+                const levelTime = Math.floor((Date.now() - levelStartTime) / 1000);
+                alert(`恭喜通过第${currentLevel}关！用时: ${levelTime}秒`);
+
+                // 进入下一关
+                nextLevel();
             }
         }
     });
@@ -193,8 +477,11 @@
     // 更新计时器
     function updateTimer() {
         if(!gameOver) {
-            const timeElapsed = Math.floor((Date.now() - startTime) / 1000);
-            document.getElementById('timer').textContent = timeElapsed;
+            const levelTimeElapsed = Math.floor((Date.now() - levelStartTime) / 1000);
+            document.getElementById('timer').textContent = levelTimeElapsed;
+
+            const totalTimeElapsed = totalTime + levelTimeElapsed;
+            document.getElementById('totalTimer').textContent = totalTimeElapsed;
         }
     }
 
@@ -204,9 +491,6 @@
         renderer.render(scene, camera);
         updateTimer();
     }
-
-    // 每秒移动魔鬼
-    setInterval(moveDevil, 1000);
 
     // 创建迷宫并开始游戏
     createMaze();
