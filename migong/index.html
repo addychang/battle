@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"> <!-- 设置字符编码为 UTF-8 -->
+    <title>3D 迷宫游戏</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+        #info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial;
+            font-size: 16px;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+<div id="info">时间: <span id="timer">0</span>秒</div>
+<script>
+    // 初始化场景、相机和渲染器
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // 迷宫大小
+    const MAZE_SIZE = 15;
+    let maze = [];
+    let playerPos = { x: 1, z: 1 };
+    let devilPos = { x: MAZE_SIZE-2, z: MAZE_SIZE-2 };
+    let startTime = Date.now();
+    let gameOver = false;
+
+    // 生成迷宫
+    function generateMaze() {
+        // 初始化迷宫数组
+        for(let i = 0; i < MAZE_SIZE; i++) {
+            maze[i] = [];
+            for(let j = 0; j < MAZE_SIZE; j++) {
+                maze[i][j] = 1; // 1表示墙
+            }
+        }
+
+        function carve(x, z) {
+            maze[x][z] = 0; // 0表示路
+            const directions = [[0,2], [2,0], [0,-2], [-2,0]];
+            directions.sort(() => Math.random() - 0.5);
+
+            for(let [dx, dz] of directions) {
+                let newX = x + dx;
+                let newZ = z + dz;
+                if(newX > 0 && newX < MAZE_SIZE-1 && newZ > 0 && newZ < MAZE_SIZE-1 && maze[newX][newZ] === 1) {
+                    maze[x + dx/2][z + dz/2] = 0;
+                    carve(newX, newZ);
+                }
+            }
+        }
+
+        carve(1, 1);
+        maze[MAZE_SIZE-2][MAZE_SIZE-2] = 0; // 终点
+    }
+
+    // 创建迷宫
+    function createMaze() {
+        generateMaze();
+
+        // 地板
+        const floorGeometry = new THREE.PlaneGeometry(MAZE_SIZE, MAZE_SIZE);
+        const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x808080, side: THREE.DoubleSide });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = Math.PI / 2;
+        scene.add(floor);
+
+        // 墙壁
+        const wallGeometry = new THREE.BoxGeometry(1, 1, 1);
+        const wallMaterial = new THREE.MeshPhongMaterial({ color: 0x808080 });
+
+        for(let i = 0; i < MAZE_SIZE; i++) {
+            for(let j = 0; j < MAZE_SIZE; j++) {
+                if(maze[i][j] === 1) {
+                    const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+                    wall.position.set(i - MAZE_SIZE/2, 0.5, j - MAZE_SIZE/2);
+                    scene.add(wall);
+                }
+            }
+        }
+
+        // 玩家
+        const playerGeometry = new THREE.SphereGeometry(0.3);
+        const playerMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+        window.player = new THREE.Mesh(playerGeometry, playerMaterial);
+        player.position.set(playerPos.x - MAZE_SIZE/2, 0.3, playerPos.z - MAZE_SIZE/2);
+        scene.add(player);
+
+        // 魔鬼
+        const devilGeometry = new THREE.SphereGeometry(0.3);
+        const devilMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+        window.devil = new THREE.Mesh(devilGeometry, devilMaterial);
+        devil.position.set(devilPos.x - MAZE_SIZE/2, 0.3, devilPos.z - MAZE_SIZE/2);
+        scene.add(devil);
+
+        // 终点
+        const goalGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+        const goalMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00 });
+        const goal = new THREE.Mesh(goalGeometry, goalMaterial);
+        goal.position.set(MAZE_SIZE-2 - MAZE_SIZE/2, 0.25, MAZE_SIZE-2 - MAZE_SIZE/2);
+        scene.add(goal);
+    }
+
+    // 光照
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    directionalLight.position.set(10, 20, 0);
+    scene.add(directionalLight);
+
+    // 相机位置
+    camera.position.y = 10;
+    camera.position.z = 10;
+    camera.lookAt(0, 0, 0);
+
+    // 魔鬼移动
+    function moveDevil() {
+        if(gameOver) return;
+
+        const directions = [[0,1], [1,0], [0,-1], [-1,0]];
+        const validMoves = directions.filter(([dx, dz]) => {
+            const newX = devilPos.x + dx;
+            const newZ = devilPos.z + dz;
+            return newX > 0 && newX < MAZE_SIZE-1 && newZ > 0 && newZ < MAZE_SIZE-1 && maze[newX][newZ] === 0;
+        });
+
+        if(validMoves.length > 0) {
+            const [dx, dz] = validMoves[Math.floor(Math.random() * validMoves.length)];
+            devilPos.x += dx;
+            devilPos.z += dz;
+            devil.position.x = devilPos.x - MAZE_SIZE/2;
+            devil.position.z = devilPos.z - MAZE_SIZE/2;
+        }
+
+        // 检查是否抓到玩家
+        if(devilPos.x === playerPos.x && devilPos.z === playerPos.z) {
+            gameOver = true;
+            alert('游戏结束！你被魔鬼抓到了！');
+            location.reload();
+        }
+    }
+
+    // 键盘控制
+    document.addEventListener('keydown', (event) => {
+        if(gameOver) return;
+
+        const oldX = playerPos.x;
+        const oldZ = playerPos.z;
+
+        switch(event.key) {
+            case 'ArrowUp':
+                if(maze[playerPos.x][playerPos.z - 1] === 0) playerPos.z--;
+                break;
+            case 'ArrowDown':
+                if(maze[playerPos.x][playerPos.z + 1] === 0) playerPos.z++;
+                break;
+            case 'ArrowLeft':
+                if(maze[playerPos.x - 1][playerPos.z] === 0) playerPos.x--;
+                break;
+            case 'ArrowRight':
+                if(maze[playerPos.x + 1][playerPos.z] === 0) playerPos.x++;
+                break;
+        }
+
+        if(oldX !== playerPos.x || oldZ !== playerPos.z) {
+            player.position.x = playerPos.x - MAZE_SIZE/2;
+            player.position.z = playerPos.z - MAZE_SIZE/2;
+
+            // 检查是否到达终点
+            if(playerPos.x === MAZE_SIZE-2 && playerPos.z === MAZE_SIZE-2) {
+                gameOver = true;
+                const timeUsed = Math.floor((Date.now() - startTime) / 1000);
+                alert(`恭喜你赢了！用时: ${timeUsed}秒`);
+                location.reload();
+            }
+        }
+    });
+
+    // 更新计时器
+    function updateTimer() {
+        if(!gameOver) {
+            const timeElapsed = Math.floor((Date.now() - startTime) / 1000);
+            document.getElementById('timer').textContent = timeElapsed;
+        }
+    }
+
+    // 动画循环
+    function animate() {
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+        updateTimer();
+    }
+
+    // 每秒移动魔鬼
+    setInterval(moveDevil, 1000);
+
+    // 创建迷宫并开始游戏
+    createMaze();
+    animate();
+
+    // 窗口大小调整
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+</body>
+</html>
